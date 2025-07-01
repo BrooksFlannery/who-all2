@@ -1,7 +1,26 @@
+import { EventCard } from '@/components/EventCard';
 import { ThemedText } from '@/components/ThemedText';
 import { useChat } from '@/hooks/useChat';
 import React from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  events?: Array<{
+    id: string;
+    title: string;
+    description: string;
+    categories: string[];
+    attendeesCount: number;
+    interestedCount: number;
+    location?: {
+      neighborhood?: string;
+    };
+    similarityScore?: number;
+  }>;
+}
 
 export default function ChatScreen() {
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat();
@@ -11,20 +30,64 @@ export default function ChatScreen() {
     handleInputChange({ target: { value: text } } as any);
   };
 
+  // Parse events from message content
+  const parseEventsFromMessage = (content: string) => {
+    const eventMatch = content.match(/<events>\s*(\[.*?\])\s*<\/events>/s);
+    if (eventMatch) {
+      try {
+        return JSON.parse(eventMatch[1]);
+      } catch (error) {
+        console.error('Error parsing events from message:', error);
+        return [];
+      }
+    }
+    return [];
+  };
+
   // Render each message in the chat
-  const renderMessage = ({ item }: { item: any }) => (
-    <View style={[
-      styles.messageContainer,
-      item.role === 'user' ? styles.userMessage : styles.assistantMessage
-    ]}>
-      <ThemedText style={[
-        styles.messageText,
-        item.role === 'user' ? styles.userMessageText : styles.assistantMessageText
+  const renderMessage = ({ item }: { item: ChatMessage }) => {
+    const events = item.role === 'assistant' ? parseEventsFromMessage(item.content) : [];
+    const textContent = item.content.replace(/<events>.*?<\/events>/s, '').trim();
+
+    return (
+      <View style={[
+        styles.messageContainer,
+        item.role === 'user' ? styles.userMessage : styles.assistantMessage
       ]}>
-        {item.content}
-      </ThemedText>
-    </View>
-  );
+        {textContent && (
+          <ThemedText style={[
+            styles.messageText,
+            item.role === 'user' ? styles.userMessageText : styles.assistantMessageText
+          ]}>
+            {textContent}
+          </ThemedText>
+        )}
+
+        {events.length > 0 && (
+          <View style={styles.eventsContainer}>
+            {events.map((event: any, index: number) => (
+              <EventCard
+                key={`${item.id}-event-${index}`}
+                id={event.id}
+                title={event.title}
+                description={event.description}
+                categories={event.categories}
+                attendeesCount={event.attendeesCount}
+                interestedCount={event.interestedCount}
+                location={event.location}
+                similarityScore={event.similarityScore}
+                compact={true}
+                onPress={() => {
+                  // TODO: Navigate to event details
+                  console.log('Navigate to event:', event.id);
+                }}
+              />
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  };
 
   return (
     <KeyboardAvoidingView
@@ -33,7 +96,7 @@ export default function ChatScreen() {
     >
       {/* Messages List */}
       <FlatList
-        data={messages}
+        data={messages as ChatMessage[]}
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
         style={styles.messagesList}
@@ -100,6 +163,9 @@ const styles = StyleSheet.create({
   },
   assistantMessageText: {
     color: '#000000',
+  },
+  eventsContainer: {
+    marginTop: 8,
   },
   inputContainer: {
     flexDirection: 'row',

@@ -86,6 +86,9 @@ export const event = pgTable("event", {
     // Derived/cached fields
     attendeesCount: integer("attendees_count").default(0).notNull(),
     interestedCount: integer("interested_count").default(0).notNull(),
+    // Chat analysis fields
+    keywords: text("keywords").array().default([]),
+    keywordScores: jsonb("keyword_scores").default({}),
 });
 
 // User profiles table for preferences and interests
@@ -98,6 +101,10 @@ export const userProfile = pgTable("user_profile", {
     preferences: jsonb("preferences").notNull(), // { distance_radius_km: number, preferred_categories: string[] }
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    // Chat analysis fields
+    interestsJson: jsonb("interests_json").default({}),
+    interestScores: jsonb("interest_scores").default({}),
+    lastInterestUpdate: timestamp("last_interest_update", { withTimezone: true }).defaultNow(),
 });
 
 // Event interaction status enum
@@ -126,6 +133,15 @@ export const eventInteraction = pgTable("event_interaction", {
     // This will be handled in the application layer or with a unique index
 });
 
+// Event recommendations table
+export const eventRecommendation = pgTable("event_recommendation", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: 'cascade' }),
+    eventId: uuid("event_id").notNull().references(() => event.id, { onDelete: 'cascade' }),
+    recommendedAt: timestamp("recommended_at", { withTimezone: true }).defaultNow().notNull(),
+    context: text("context"),
+});
+
 export const schema = {
     user,
     session,
@@ -134,5 +150,6 @@ export const schema = {
     message,
     event,
     userProfile,
-    eventInteraction
+    eventInteraction,
+    eventRecommendation
 }

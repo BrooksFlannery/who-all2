@@ -59,4 +59,49 @@ export type EventWithInteractions = Event & {
 
 export type UserProfileWithUser = UserProfile & {
     user: User;
-}; 
+};
+
+// User Interests Format
+export interface UserInterests {
+    broad: string[];        // e.g., ["fitness", "social", "technology"]
+    specific: string[];     // e.g., ["morning running", "coffee networking", "coding workshops"]
+    scores: Record<string, number>; // Confidence scores 0-1
+    lastUpdated: Date;
+}
+
+// Event Keywords Format
+export interface EventKeywords {
+    keywords: string[];     // e.g., ["running", "fitness", "morning", "cardio", "outdoor"]
+    scores: Record<string, number>; // Relevance scores 0-1
+}
+
+// Interest Extraction Result
+export interface InterestExtractionResult {
+    newInterests: {
+        broad: string[];
+        specific: string[];
+    };
+    confidence: number;
+    shouldUpdate: boolean;
+}
+
+// Event Recommendation Result
+export interface EventRecommendationResult {
+    id: string;
+    title: string;
+    description: string;
+    categories: string[];
+    attendeesCount: number;
+    interestedCount: number;
+    location: {
+        neighborhood?: string;
+    };
+    similarityScore: number;
+}
+
+// Chat Response with Events
+export interface ChatResponseWithEvents {
+    text: string;
+    events?: EventRecommendationResult[];
+    needsClarification?: boolean;
+} 

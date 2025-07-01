@@ -8,6 +8,13 @@
       "when": 1751392768857,
       "tag": "0000_steady_sersi",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1751402284220,
+      "tag": "0001_kind_morg",
+      "breakpoints": true
     }
   ]
 }
