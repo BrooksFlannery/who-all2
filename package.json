@@ -12,7 +12,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "db:seed": "npx tsx scripts/seed-events.ts",
-    "db:keywords": "npx tsx scripts/generate-event-keywords.ts"
+    "db:keywords": "npx tsx scripts/generate-event-keywords.ts",
+    "test:chat": "npx tsx scripts/test-chat-analysis.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.22",

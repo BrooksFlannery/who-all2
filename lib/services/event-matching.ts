@@ -87,13 +87,12 @@ Return only a number between 0 and 1.`;
                 return [];
             }
 
-            // Get all events with keywords
-            const events = await db
-                .select()
-                .from(event)
-                .where(eq(event.keywords, []));
+            // Get all events and filter for those with keywords
+            const allEvents = await db.select().from(event);
+            const events = allEvents.filter(event => event.keywords && event.keywords.length > 0);
 
             if (events.length === 0) {
+                console.log("No events found with keywords");
                 return [];
             }
 
@@ -115,6 +114,11 @@ Return only a number between 0 and 1.`;
                 score: number;
             }> = [];
 
+            console.log(`Processing ${availableEvents.length} events for user interests:`, {
+                broad: userInterests.broad,
+                specific: userInterests.specific
+            });
+
             for (const eventItem of availableEvents) {
                 const eventKeywords = eventItem.keywords || [];
                 const allUserInterests = [
@@ -123,8 +127,11 @@ Return only a number between 0 and 1.`;
                 ];
 
                 if (allUserInterests.length === 0 || eventKeywords.length === 0) {
+                    console.log(`Skipping event "${eventItem.title}" - no interests or keywords`);
                     continue;
                 }
+
+                console.log(`Calculating similarity for "${eventItem.title}" with keywords:`, eventKeywords);
 
                 const similarityScore = await this.calculateSimilarity(
                     allUserInterests,
@@ -139,6 +146,8 @@ Return only a number between 0 and 1.`;
 
                 const totalScore = similarityScore + popularityScore;
 
+                console.log(`Event "${eventItem.title}" - Similarity: ${similarityScore}, Popularity: ${popularityScore}, Total: ${totalScore}`);
+
                 if (totalScore > 0.3) { // Only include events with reasonable match
                     eventScores.push({
                         event: eventItem,
@@ -148,7 +157,7 @@ Return only a number between 0 and 1.`;
             }
 
             // Sort by score and return top results
-            return eventScores
+            const matchedEvents = eventScores
                 .sort((a, b) => b.score - a.score)
                 .slice(0, maxResults)
                 .map(({ event: eventItem, score }) => ({
@@ -161,6 +170,27 @@ Return only a number between 0 and 1.`;
                     location: eventItem.location as { neighborhood?: string },
                     similarityScore: score
                 }));
+
+            if (matchedEvents.length === 0) {
+                console.log("No matching events found, returning popular events as fallback");
+                // Return popular events as fallback
+                const popularEvents = allEvents
+                    .sort((a, b) => (b.attendeesCount + b.interestedCount) - (a.attendeesCount + a.interestedCount))
+                    .slice(0, maxResults)
+                    .map(eventItem => ({
+                        id: eventItem.id,
+                        title: eventItem.title,
+                        description: eventItem.description,
+                        categories: eventItem.categories,
+                        attendeesCount: eventItem.attendeesCount,
+                        interestedCount: eventItem.interestedCount,
+                        location: eventItem.location as { neighborhood?: string },
+                        similarityScore: 0.1 // Low similarity score for fallback
+                    }));
+                return popularEvents;
+            }
+
+            return matchedEvents;
         } catch (error) {
             console.error("Error matching events to interests:", error);
             return [];
@@ -228,6 +258,39 @@ Return only a number between 0 and 1.`;
         } catch (error) {
             console.error("Error fetching user profile:", error);
             return null;
+        }
+    }
+
+    /**
+     * Create a new user profile
+     */
+    async createUserProfile(
+        userId: string,
+        profileData: {
+            name: string;
+            location: { lat: number; lng: number };
+            interests?: string[];
+            preferences?: { distance_radius_km: number; preferred_categories: string[] };
+        }
+    ): Promise<void> {
+        try {
+            if (!db) {
+                console.error("Database not available");
+                return;
+            }
+
+            await db.insert(userProfile).values({
+                userId,
+                name: profileData.name,
+                location: profileData.location,
+                interests: profileData.interests || [],
+                preferences: profileData.preferences || { distance_radius_km: 10, preferred_categories: [] },
+                interestsJson: {},
+                interestScores: {},
+                lastInterestUpdate: new Date()
+            });
+        } catch (error) {
+            console.error("Error creating user profile:", error);
         }
     }
 
