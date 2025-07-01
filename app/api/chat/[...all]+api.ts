@@ -5,6 +5,9 @@ import { openai } from "@ai-sdk/openai";
 import { streamText } from "ai";
 import { desc, eq } from "drizzle-orm";
 
+// Allow streaming responses up to 30 seconds
+export const maxDuration = 30;
+
 export async function POST(req: Request) {
     console.log("POST /api/chat - Request received");
 
@@ -46,7 +49,15 @@ export async function POST(req: Request) {
         console.log("OpenAI response received, returning stream");
 
         // Return the streaming response immediately
-        return result.toDataStreamResponse();
+        const response = result.toDataStreamResponse();
+
+        // Add headers to prevent buffering
+        response.headers.set('Cache-Control', 'no-cache, no-transform');
+        response.headers.set('Connection', 'keep-alive');
+        response.headers.set('X-Accel-Buffering', 'no');
+
+        console.log("Response headers:", Object.fromEntries(response.headers.entries()));
+        return response;
     } catch (error) {
         console.error("Error calling OpenAI:", error);
         return new Response("Error calling AI service", { status: 500 });

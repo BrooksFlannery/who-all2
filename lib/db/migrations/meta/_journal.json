@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1751320823989,
-      "tag": "0000_cynical_killer_shrike",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1751375784161,
-      "tag": "0001_wealthy_marvel_zombies",
+      "when": 1751376388239,
+      "tag": "0000_far_vampiro",
       "breakpoints": true
     }
   ]

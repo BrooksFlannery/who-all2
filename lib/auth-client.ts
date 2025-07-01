@@ -9,9 +9,10 @@ const getBaseURL = () => {
         // Use relative path; same origin
         return "";
     }
-    // On native (development), Metro is on localhost:8081 
-    return "http://192.168.1.171:8081";
+    // On native, use the tunnel URL since we're running with --tunnel
+    return "https://idlbcxe-anonymous-8081.exp.direct";
 };
+
 
 export const authClient = createAuthClient({
     baseURL: getBaseURL(),
