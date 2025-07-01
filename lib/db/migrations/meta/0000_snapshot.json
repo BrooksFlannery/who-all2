@@ -1,5 +1,5 @@
 {
-  "id": "7d1ea828-df87-4b65-be9b-0473b1e30749",
+  "id": "9ae71972-2ffa-4b58-be45-c07c338243e1",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -109,8 +109,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.chat": {
-      "name": "chat",
+    "public.message": {
+      "name": "message",
       "schema": "",
       "columns": {
         "id": {
@@ -123,60 +123,6 @@
         "userId": {
           "name": "userId",
           "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "chatName": {
-          "name": "chatName",
-          "type": "varchar(256)",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'New Chat'"
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "chat_userId_user_id_fk": {
-          "name": "chat_userId_user_id_fk",
-          "tableFrom": "chat",
-          "tableTo": "user",
-          "columnsFrom": [
-            "userId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.message": {
-      "name": "message",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "chatId": {
-          "name": "chatId",
-          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
@@ -193,13 +139,6 @@
           "notNull": true,
           "default": "now()"
         },
-        "accessedAt": {
-          "name": "accessedAt",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
         "role": {
           "name": "role",
           "type": "role",
@@ -210,12 +149,12 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "message_chatId_chat_id_fk": {
-          "name": "message_chatId_chat_id_fk",
+        "message_userId_user_id_fk": {
+          "name": "message_userId_user_id_fk",
           "tableFrom": "message",
-          "tableTo": "chat",
+          "tableTo": "user",
           "columnsFrom": [
-            "chatId"
+            "userId"
           ],
           "columnsTo": [
             "id"

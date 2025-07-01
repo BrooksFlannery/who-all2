@@ -27,6 +27,7 @@ export const auth = betterAuth({
         "whoall2://*",
         "exp://localhost:8081/*",
         "exp://192.168.1.*:8081/*", // For local network testing
+        "exp://*.exp.direct/*",
     ],
     callbacks: {
         session: ({ session, user }: { session: any; user: any }) => {
