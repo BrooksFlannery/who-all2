@@ -1,4 +1,4 @@
-import { boolean, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
     id: text('id').primaryKey(),
@@ -56,4 +56,83 @@ export const message = pgTable("message", {
     role: roleEnum("role").notNull(),
 });
 
-export const schema = { user, session, account, verification, message }
+// New tables for events and social features
+
+// Event categories enum
+export const eventCategoryEnum = pgEnum("event_category", [
+    "fitness",
+    "social",
+    "creative",
+    "technology",
+    "education",
+    "food",
+    "music",
+    "outdoors",
+    "business",
+    "other"
+]);
+
+// Events table
+export const event = pgTable("event", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    title: text("title").notNull(),
+    date: timestamp("date", { withTimezone: true }).notNull(),
+    location: jsonb("location").notNull(), // { lat: number, lng: number, neighborhood?: string }
+    description: text("description").notNull(),
+    categories: text("categories").array().notNull(), // Array of categories instead of single category
+    hostId: text("host_id").references(() => user.id), // Optional - for user-hosted events
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+    // Derived/cached fields
+    attendeesCount: integer("attendees_count").default(0).notNull(),
+    interestedCount: integer("interested_count").default(0).notNull(),
+});
+
+// User profiles table for preferences and interests
+export const userProfile = pgTable("user_profile", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: 'cascade' }).unique(),
+    name: text("name").notNull(),
+    location: jsonb("location").notNull(), // { lat: number, lng: number }
+    interests: text("interests").array(), // Array of interest tags
+    preferences: jsonb("preferences").notNull(), // { distance_radius_km: number, preferred_categories: string[] }
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Event interaction status enum
+export const interactionStatusEnum = pgEnum("interaction_status", [
+    "interested",
+    "going",
+    "not_interested"
+]);
+
+// Event interaction source enum
+export const interactionSourceEnum = pgEnum("interaction_source", [
+    "chat",
+    "browse",
+    "external"
+]);
+
+// Event interactions table
+export const eventInteraction = pgTable("event_interaction", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: 'cascade' }),
+    eventId: uuid("event_id").notNull().references(() => event.id, { onDelete: 'cascade' }),
+    status: interactionStatusEnum("status").notNull(),
+    source: interactionSourceEnum("source").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    // Composite unique constraint to prevent duplicate interactions
+    // This will be handled in the application layer or with a unique index
+});
+
+export const schema = {
+    user,
+    session,
+    account,
+    verification,
+    message,
+    event,
+    userProfile,
+    eventInteraction
+}
