@@ -2,7 +2,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { getAuthHeaders } from '@/lib/auth-client';
 import { Event, EventCategory } from '@/lib/db/types';
 import React, { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // Event categories for filtering
 const categories = ['All', 'Fitness', 'Social', 'Creative', 'Technology', 'Education', 'Food', 'Music', 'Outdoors', 'Business', 'Other'] as const;
@@ -119,7 +119,7 @@ export default function EventsScreen() {
           <Text style={styles.eventTime}>{formatTime(item.date)}</Text>
         </View>
         <View style={styles.categoriesContainer}>
-          {item.categories.slice(0, 2).map((category, index) => (
+          {item.categories.map((category, index) => (
             <View
               key={index}
               style={[
@@ -130,11 +130,6 @@ export default function EventsScreen() {
               <Text style={styles.categoryText}>{category}</Text>
             </View>
           ))}
-          {item.categories.length > 2 && (
-            <View style={[styles.categoryBadge, { backgroundColor: '#6C757D' }]}>
-              <Text style={styles.categoryText}>+{item.categories.length - 2}</Text>
-            </View>
-          )}
         </View>
       </View>
 
@@ -190,7 +185,11 @@ export default function EventsScreen() {
 
       {/* Category Bar */}
       <View style={styles.categoryBar}>
-        <View style={styles.categoryBarContent}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryBarContent}
+        >
           {categories.map((category) => (
             <TouchableOpacity
               key={category}
@@ -208,7 +207,7 @@ export default function EventsScreen() {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
       </View>
 
       {/* Events List */}
@@ -269,9 +268,9 @@ const styles = StyleSheet.create({
   },
   categoryBarContent: {
     paddingHorizontal: 20,
-    justifyContent: 'space-between',
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 16,
   },
   categoryButton: {
     paddingHorizontal: 16,
@@ -320,7 +319,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   dateTimeContainer: {
-    flex: 1,
+    flexShrink: 0,
   },
   eventDate: {
     fontSize: 16,
@@ -335,16 +334,20 @@ const styles = StyleSheet.create({
   },
   categoriesContainer: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
     flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    alignItems: 'flex-start',
+    flex: 1,
+    marginLeft: 12,
   },
   categoryBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   categoryText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '600',
     color: '#FFFFFF',
     textTransform: 'capitalize',

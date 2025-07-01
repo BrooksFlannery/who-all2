@@ -1,50 +1,141 @@
-# Welcome to your Expo app 👋
+## 🗄 Database Schema
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+The app uses a comprehensive database schema with the following main entities:
 
-## Get started
+- **Users**: Authentication and profile management
+- **Events**: Event details with categories, location, and attendance tracking
+- **Messages**: Chat history for AI conversations
+- **Event Interactions**: User engagement tracking (interested, going, not interested)
+- **User Profiles**: Preferences and location settings
 
-1. Install dependencies
+## 🚀 Getting Started
 
+### Prerequisites
+- Node.js 18+ 
+- Expo CLI
+- PostgreSQL database (Neon recommended)
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd who-all2
+   ```
+
+2. **Install dependencies**
    ```bash
    npm install
    ```
 
-2. Start the app
-
-   ```bash
-   npx expo start
+3. **Environment Setup**
+   Create a `.env` file in the root directory:
+   ```env
+   EXPO_PUBLIC_DATABASE_URL=your_postgresql_connection_string
+   OPENAI_API_KEY=your_openai_api_key
    ```
 
-In the output, you'll find options to open the app in a
+4. **Database Setup**
+   ```bash
+   # Generate and run migrations
+   npm run db:generate
+   npm run db:migrate
+   
+   # Seed with sample events
+   npm run db:seed
+   ```
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+5. **Start Development Server**
+   ```bash
+   npm start
+   ```
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+### Available Scripts
 
-## Get a fresh project
+- `npm start` - Start Expo development server
+- `npm run ios` - Run on iOS simulator
+- `npm run android` - Run on Android emulator
+- `npm run web` - Run in web browser
+- `npm run lint` - Run ESLint
+- `npm run db:generate` - Generate database migrations
+- `npm run db:migrate` - Run database migrations
+- `npm run db:studio` - Open Drizzle Studio
+- `npm run db:seed` - Seed database with sample events
 
-When you're ready, run:
+## 🎨 Key Components
 
+### Event Discovery
+The main events screen (`app/(tabs)/index.tsx`) features:
+- Category-based filtering
+- Event cards with date/time formatting
+- Location display with neighborhood information
+- Attendance statistics
+- Responsive design with proper loading states
+
+### AI Chat Interface
+The chat screen (`app/(tabs)/chat.tsx`) provides:
+- Real-time messaging with AI assistant
+- Message history persistence
+- Authentication integration
+- Responsive input handling
+
+### Authentication
+Secure authentication flow with:
+- Email/password sign-in and sign-up
+- Session management
+- Protected routes
+- Better Auth integration
+
+## 🎯 Configuration
+
+### App Configuration
+The app is configured via `app.config.js` with:
+- Expo settings for iOS, Android, and Web
+- Custom scheme for deep linking
+- Environment variable integration
+- Splash screen and icon configuration
+
+### Database Configuration
+Database setup includes:
+- Drizzle ORM configuration
+- Migration management
+- Type-safe schema definitions
+- Connection pooling with Neon
+
+## 🚀 Deployment
+
+### Expo Build
 ```bash
-npm run reset-project
+# Build for production
+expo build:ios
+expo build:android
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### Web Deployment
+```bash
+# Build for web
+expo export:web
+```
 
-## Learn more
+## 🤝 Contributing
 
-To learn more about developing your project with Expo, look at the following resources:
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## 📄 License
 
-## Join the community
+This project is licensed under the MIT License.
 
-Join our community of developers creating universal apps.
+## 🆘 Support
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+For support and questions:
+- Check the [Expo documentation](https://docs.expo.dev/)
+- Review [Drizzle ORM docs](https://orm.drizzle.team/)
+- Consult [Better Auth documentation](https://better-auth.com/)
+
+---
+
+Built with ❤️ using React Native and Expo
