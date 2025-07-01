@@ -1,4 +1,4 @@
-import { boolean, pgEnum, pgTable, text, timestamp, uuid, varchar } from "drizzle-orm/pg-core";
+import { boolean, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
     id: text('id').primaryKey(),
@@ -46,22 +46,14 @@ export const verification = pgTable("verification", {
     updatedAt: timestamp('updated_at').$defaultFn(() => /* @__PURE__ */ new Date())
 });
 
-export const chat = pgTable("chat", {
-    id: uuid("id").defaultRandom().primaryKey(),
-    userId: text("userId").notNull().references(() => user.id),
-    chatName: varchar("chatName", { length: 256 }).default("New Chat"),
-    createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
-});
-
 export const roleEnum = pgEnum("role", ["user", "assistant", "tool", "system"]);
 
 export const message = pgTable("message", {
     id: uuid("id").defaultRandom().primaryKey(),
-    chatId: uuid("chatId").notNull().references(() => chat.id),
+    userId: text("userId").notNull().references(() => user.id),
     content: text("content").notNull(),
     createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
-    accessedAt: timestamp("accessedAt", { withTimezone: true }).defaultNow().notNull(),
     role: roleEnum("role").notNull(),
 });
 
-export const schema = { user, session, account, verification }
+export const schema = { user, session, account, verification, message }
