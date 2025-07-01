@@ -269,21 +269,135 @@ Available Events: {matchedEvents}
 - **Performance**: Response time for event matching
 - **User Experience**: Natural conversation flow
 
-## Next Steps
+## 🚨 Current Issues & Next Steps
 
-1. **Database Migration**: Create and run migration scripts
-2. **Keyword Generation**: Implement and run keyword extraction
-3. **Core Services**: Build interest extraction and event matching
-4. **API Enhancement**: Update chat API with new functionality
-5. **UI Implementation**: Create reusable event card component
-6. **Testing**: Comprehensive testing of all components
-7. **Deployment**: Gradual rollout with monitoring
+### Issue 1: JSON Parsing Error in Interest Extraction
+**Problem**: AI returns markdown-formatted JSON (````json`) instead of raw JSON
+**Error**: `SyntaxError: Unexpected token '`', "```json`
+
+**Solution**: Improve the AI prompt to be more explicit about JSON formatting:
+```typescript
+const prompt = `
+Extract interests from this message and conversation context. 
+
+IMPORTANT: Return ONLY valid JSON without any markdown formatting, code blocks, or extra text.
+
+Expected format:
+{"newInterests": {"broad": [], "specific": []}, "confidence": 0.8, "shouldUpdate": true}
+
+Message: ${userMessage}
+Recent Context: ${context}
+
+Return only the JSON object:`;
+```
+
+### Issue 2: Missing User Profile Creation
+**Problem**: Existing users don't have associated user profiles
+**Impact**: Interest extraction fails because no profile exists to store interests
+
+**Solution**: Add automatic profile creation in chat API:
+```typescript
+// After getting user profile
+if (!userProfile) {
+  // Create default profile for existing user
+  await eventService.createUserProfile(session.user.id, {
+    name: session.user.name,
+    location: { lat: 0, lng: 0 }, // Default location
+    interests: [],
+    preferences: { distance_radius_km: 10, preferred_categories: [] }
+  });
+}
+```
+
+### Issue 3: Event Matching Query Issue
+**Problem**: Event matching service queries for events with empty keywords array
+**Impact**: No events are found for matching
+
+**Solution**: Fix the query in event matching service:
+```typescript
+// Change from:
+const events = await db.select().from(event).where(eq(event.keywords, []));
+
+// To:
+const events = await db.select().from(event).where(sql`array_length(${event.keywords}, 1) > 0`);
+```
+
+## 🔧 Implementation Steps for Fixes
+
+### Phase 1: Fix JSON Parsing (Priority 1)
+1. **Update Interest Extraction Prompt**
+   - Make JSON formatting requirements more explicit
+   - Add examples of correct vs incorrect responses
+   - Test with various conversation inputs
+
+2. **Add JSON Validation & Fallback**
+   - Implement regex to extract JSON from markdown
+   - Add fallback parsing for common AI response formats
+   - Log parsing attempts for debugging
+
+### Phase 2: Fix User Profile Creation (Priority 1)
+1. **Add Profile Creation Logic**
+   - Create `createUserProfile` method in EventMatchingService
+   - Add automatic profile creation in chat API
+   - Handle existing users without profiles
+
+2. **Add Profile Migration Script**
+   - Create script to add profiles for existing users
+   - Set default preferences and empty interests
+   - Test with existing user accounts
+
+### Phase 3: Fix Event Matching (Priority 2)
+1. **Fix Event Query**
+   - Update query to find events with keywords
+   - Add proper database indexes for performance
+   - Test event matching with real data
+
+2. **Add Event Matching Debugging**
+   - Log similarity scores for debugging
+   - Add fallback to popular events when no matches
+   - Test with various interest combinations
+
+### Phase 4: Testing & Validation (Priority 3)
+1. **End-to-End Testing**
+   - Test complete flow: user message → interest extraction → event matching → UI rendering
+   - Verify event cards appear in chat
+   - Test recommendation tracking
+
+2. **Performance Testing**
+   - Measure response times for interest extraction
+   - Test with large conversation histories
+   - Optimize database queries
+
+## 🔧 Success Metrics
+
+- **Relevance**: User engagement with recommended events
+- **Accuracy**: Interest extraction precision
+- **Performance**: Response time for event matching
+- **User Experience**: Natural conversation flow
+
+## 📊 Current Status
+
+- **Database Schema**: ✅ Complete
+- **Keyword Generation**: ✅ Complete (59 events processed)
+- **Core Services**: ✅ Complete
+- **API Enhancement**: ✅ Complete
+- **UI Implementation**: ✅ Complete
+- **JSON Parsing**: ❌ Needs fix
+- **User Profile Creation**: ❌ Needs fix
+- **Event Matching**: ❌ Needs fix
+- **End-to-End Testing**: ❌ Pending
+
+## 🚀 Next Actions
+
+1. **Immediate**: Fix JSON parsing in interest extraction
+2. **Immediate**: Add user profile creation logic
+3. **Short-term**: Fix event matching query
+4. **Medium-term**: Comprehensive testing and optimization
 
 ## Timeline Estimate
 
-- **Phase 1**: 1 day (database + keywords)
-- **Phase 2**: 1 day (core services)
-- **Phase 3**: 0.5 day (API enhancement)
-- **Phase 4**: 0.5 day (UI implementation)
-- **Testing**: 0.5 day
-- **Total**: 3.5 days (fits within 3-day constraint with some buffer)
+- **Phase 1 (JSON Parsing)**: 0.5 day
+- **Phase 2 (Profile Creation)**: 0.5 day  
+- **Phase 3 (Event Matching)**: 0.5 day
+- **Phase 4 (Testing)**: 0.5 day
+- **Total**: 2 days to complete all fixes

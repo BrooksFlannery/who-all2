@@ -62,6 +62,24 @@ export async function POST(req: Request) {
         if (userProfile) {
             userInterests = userProfile.interests;
             shouldUpdateInterests = userProfile.needsUpdate;
+        } else {
+            // Create default profile for existing user
+            console.log("Creating default user profile for:", session.user.id);
+            await eventService.createUserProfile(session.user.id, {
+                name: session.user.name || "User",
+                location: { lat: 0, lng: 0 }, // Default location
+                interests: [],
+                preferences: { distance_radius_km: 10, preferred_categories: [] }
+            });
+
+            // Initialize empty interests
+            userInterests = {
+                broad: [],
+                specific: [],
+                scores: {},
+                lastUpdated: new Date()
+            };
+            shouldUpdateInterests = true;
         }
 
         // Extract interests from current message and context

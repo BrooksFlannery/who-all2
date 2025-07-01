@@ -31,15 +31,12 @@ export class InterestExtractionService {
             const prompt = `
 You are a helpful assistant analyzing user conversations to understand their interests and preferences for events.
 
-Extract interests from this message and conversation context. Return as JSON:
-{
-  "newInterests": {
-    "broad": ["category1", "category2"],
-    "specific": ["specific_interest1", "specific_interest2"]
-  },
-  "confidence": 0.8,
-  "shouldUpdate": true/false
-}
+Extract interests from this message and conversation context. 
+
+IMPORTANT: Return ONLY valid JSON without any markdown formatting, code blocks, or extra text.
+
+Expected format:
+{"newInterests": {"broad": [], "specific": []}, "confidence": 0.8, "shouldUpdate": true}
 
 Consider:
 - Categories: fitness, social, creative, technology, education, food, music, outdoors, business
@@ -52,7 +49,7 @@ Existing interests: ${existingInterests ? JSON.stringify(existingInterests) : 'n
 Message: ${userMessage}
 Recent Context: ${context}
 
-Return only valid JSON.`;
+Return only the JSON object:`;
 
             const result = await generateText({
                 model: openai("gpt-4o-mini"),
@@ -60,7 +57,37 @@ Return only valid JSON.`;
                 maxTokens: 500,
             });
 
-            const parsed = JSON.parse(result.text) as InterestExtractionResult;
+            // Try to parse JSON, with fallback for markdown formatting
+            let parsed: InterestExtractionResult;
+            try {
+                parsed = JSON.parse(result.text) as InterestExtractionResult;
+            } catch (parseError) {
+                console.log("Initial JSON parse failed, attempting markdown extraction");
+
+                // Try to extract JSON from markdown code blocks
+                const jsonMatch = result.text.match(/```(?:json)?\s*(\{.*?\})\s*```/s);
+                if (jsonMatch) {
+                    try {
+                        parsed = JSON.parse(jsonMatch[1]) as InterestExtractionResult;
+                    } catch (secondError) {
+                        console.error("Failed to parse JSON from markdown:", secondError);
+                        throw new Error("Invalid interest extraction response format");
+                    }
+                } else {
+                    // Try to find JSON object in the text
+                    const jsonObjectMatch = result.text.match(/\{.*\}/s);
+                    if (jsonObjectMatch) {
+                        try {
+                            parsed = JSON.parse(jsonObjectMatch[0]) as InterestExtractionResult;
+                        } catch (thirdError) {
+                            console.error("Failed to parse JSON object from text:", thirdError);
+                            throw new Error("Invalid interest extraction response format");
+                        }
+                    } else {
+                        throw new Error("No valid JSON found in response");
+                    }
+                }
+            }
 
             // Validate the response
             if (!parsed.newInterests || !parsed.newInterests.broad || !parsed.newInterests.specific) {
