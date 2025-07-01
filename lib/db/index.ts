@@ -1,5 +1,14 @@
 import { drizzle } from "drizzle-orm/neon-http";
 
+// Load environment variables early
+if (typeof window === "undefined") {
+    try {
+        require("dotenv").config();
+    } catch (error) {
+        // dotenv might not be available in all environments
+    }
+}
+
 function isServer() {
     // window is undefined in Node.js
     return typeof window === "undefined";

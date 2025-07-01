@@ -1,6 +1,8 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { message } from "@/lib/db/schema";
+import { EventMatchingService } from "@/lib/services/event-matching";
+import { InterestExtractionService } from "@/lib/services/interest-extraction";
 import { openai } from "@ai-sdk/openai";
 import { streamText } from "ai";
 import { eq } from "drizzle-orm";
@@ -47,12 +49,96 @@ export async function POST(req: Request) {
         console.error("Error saving user message:", error);
     }
 
+    // Initialize services
+    const interestService = InterestExtractionService.getInstance();
+    const eventService = EventMatchingService.getInstance();
+
+    // Extract user interests from conversation
+    let userInterests = null;
+    let shouldUpdateInterests = false;
+
+    try {
+        const userProfile = await eventService.getUserProfile(session.user.id);
+        if (userProfile) {
+            userInterests = userProfile.interests;
+            shouldUpdateInterests = userProfile.needsUpdate;
+        }
+
+        // Extract interests from current message and context
+        const recentMessages = messages.slice(-6); // Last 6 messages for context
+        const extractionResult = await interestService.extractInterests(
+            messages[messages.length - 1].content,
+            recentMessages,
+            userInterests || undefined
+        );
+
+        if (extractionResult.shouldUpdate && extractionResult.confidence > 0.3) {
+            if (userInterests) {
+                userInterests = interestService.updateUserInterests(userInterests, extractionResult);
+            } else {
+                userInterests = {
+                    broad: extractionResult.newInterests.broad,
+                    specific: extractionResult.newInterests.specific,
+                    scores: {},
+                    lastUpdated: new Date()
+                };
+                // Initialize scores
+                extractionResult.newInterests.broad.forEach(interest => {
+                    userInterests!.scores[interest] = extractionResult.confidence;
+                });
+                extractionResult.newInterests.specific.forEach(interest => {
+                    userInterests!.scores[interest] = extractionResult.confidence;
+                });
+            }
+
+            // Update user profile with new interests
+            await eventService.updateUserProfile(session.user.id, userInterests);
+            console.log("User interests updated");
+        }
+    } catch (error) {
+        console.error("Error processing user interests:", error);
+    }
+
+    // Match events to user interests
+    let matchedEvents: any[] = [];
+    if (userInterests && (userInterests.broad.length > 0 || userInterests.specific.length > 0)) {
+        try {
+            matchedEvents = await eventService.matchEventsToInterests(session.user.id, userInterests, 3);
+            console.log(`Found ${matchedEvents.length} matching events`);
+        } catch (error) {
+            console.error("Error matching events:", error);
+        }
+    }
+
     // Get the AI response using Vercel AI SDK
     console.log("Calling OpenAI...");
     try {
         const result = await streamText({
             model: openai("gpt-4o-mini"),
-            messages,
+            messages: [
+                ...messages,
+                {
+                    role: "system",
+                    content: `You are a friendly event recommendation assistant. You know about all local events and want to help users find activities they'll enjoy.
+
+When recommending events:
+- Be conversational and enthusiastic
+- Ask clarifying questions if too many events match (continue until you have 3 or fewer clear matches)
+- Focus on category, activity level, and skill requirements
+- Don't mention time/location (handled separately)
+- Limit to 3 events maximum
+
+If you have good matches, include them in your response like this:
+<events>
+[{"id": "event_id", "title": "Event Title", "description": "Description", "categories": ["category1"], "attendeesCount": 5, "interestedCount": 3, "location": {"neighborhood": "Area"}}]
+</events>
+
+If you don't have enough information about the user's interests, tell them you need to learn more about what they enjoy.
+
+User Interests: ${userInterests ? JSON.stringify(userInterests) : 'none'}
+Available Events: ${matchedEvents.length > 0 ? JSON.stringify(matchedEvents) : 'none'}`
+                }
+            ],
             onFinish: async (completion) => {
                 // Save the AI's response to the database
                 if (!db) {
@@ -66,6 +152,18 @@ export async function POST(req: Request) {
                         role: "assistant"
                     });
                     console.log("AI message saved to database");
+
+                    // Record event recommendations if any were made
+                    if (matchedEvents.length > 0) {
+                        for (const event of matchedEvents) {
+                            await eventService.recordRecommendation(
+                                session.user.id,
+                                event.id,
+                                messages[messages.length - 1].content
+                            );
+                        }
+                        console.log("Event recommendations recorded");
+                    }
                 } catch (error) {
                     console.error("Error saving AI message:", error);
                 }
