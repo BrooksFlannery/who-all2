@@ -160,49 +160,74 @@ getRecommendations: tool({
     execute: async ({ userMessage }) => {
         // 1. Fetch user interests and events
         // 2. Calculate similarity scores
-        // 3. Return formatted recommendations
+        // 3. Return top 3 events with full data
     }
 })
 ```
 
+**Return Format**:
+```typescript
+interface RecommendationResponse {
+    events: Event[];
+    message: string;
+    success: boolean;
+    error?: string;
+}
+```
+
 **Implementation**:
 ```typescript
-async function getEventRecommendations(userId: string, limit: number = 3): Promise<string> {
-    // 1. Fetch user interests
-    const userInterests = await db
-        .select()
-        .from(userInterest)
-        .where(eq(userInterest.userId, userId));
+async function getEventRecommendations(userId: string, limit: number = 3): Promise<RecommendationResponse> {
+    try {
+        // 1. Fetch user interests
+        const userInterests = await db
+            .select()
+            .from(userInterest)
+            .where(eq(userInterest.userId, userId));
 
-    // 2. Fetch events (excluding previously shown)
-    const events = await db
-        .select()
-        .from(event)
-        .where(/* exclude shown events */);
+        // 2. Fetch events (excluding previously shown)
+        const events = await db
+            .select()
+            .from(event)
+            .where(/* exclude shown events */);
 
-    // 3. Calculate similarity scores using embeddings
-    const scores = await calculateSimilarityScores(
-        userInterests.map(i => i.keyword),
-        events.map(e => e.keywords).flat()
-    );
+        // 3. Calculate similarity scores using embeddings
+        const scores = await calculateSimilarityScores(
+            userInterests.map(i => i.keyword),
+            events.map(e => e.keywords).flat()
+        );
 
-    // 4. Apply scoring formula and return top results
-    const recommendations = events
-        .map((event, index) => ({
-            event,
-            score: scores[index]
-        }))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, limit);
+        // 4. Apply scoring formula and return top results
+        const recommendations = events
+            .map((event, index) => ({
+                event,
+                score: scores[index]
+            }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, limit);
 
-    // 5. Return conversational response
-    if (recommendations.length > 0) {
-        const eventList = recommendations.map(r => 
-            `• ${r.event.title} - ${r.event.description}`
-        ).join('\n');
-        return `Here are some events that might interest you:\n\n${eventList}\n\nWould you like to know more about any of these?`;
-    } else {
-        return `I don't have any events to recommend right now, but I'm working on finding more activities that match your interests!`;
+        // 5. Return events and conversational message
+        if (recommendations.length > 0) {
+            return {
+                events: recommendations.map(r => r.event),
+                message: `I found ${recommendations.length} events that might interest you!`,
+                success: true
+            };
+        } else {
+            return {
+                events: [],
+                message: "I don't have any events to recommend right now, but I'm working on finding more activities that match your interests!",
+                success: true
+            };
+        }
+    } catch (error) {
+        console.error('Error in getEventRecommendations:', error);
+        return {
+            events: [],
+            message: "I'm having trouble finding events right now, but I'm working on it!",
+            success: false,
+            error: error.message
+        };
     }
 }
 ```
@@ -300,13 +325,85 @@ AI: "That's awesome! I love that you're into outdoor activities. I learned that 
 
 **User says:** "Can you recommend some events?"
 ```
-AI: "Absolutely! Here are some events that might interest you:
+AI: "Absolutely! I found 3 events that might interest you!"
 
-• Morning Running Club - Join our weekly running group! All paces welcome.
-• Outdoor Adventure Meetup - Hiking and rock climbing for all skill levels.
-• Weekend Hiking Group - Explore local trails with fellow outdoor enthusiasts.
+[Event Cards displayed inline with same format as Events screen]
+```
 
-Would you like to know more about any of these?"
+## Chat UI Integration
+
+### Event Display in Chat
+
+**Event Cards**: Events are displayed inline in chat messages using the same card format as the Events screen:
+- Event title and description
+- Date and time
+- Category badges with colors
+- Location (neighborhood)
+- Attendee/interested counts
+
+**Message Structure**: When the AI calls `getRecommendations`, the response includes:
+1. **AI Text Response**: Conversational flavor text about the events
+2. **Event Data**: Full event objects for frontend rendering
+
+**Frontend Implementation**:
+```typescript
+// Chat message component
+interface ChatMessage {
+    id: string;
+    role: 'user' | 'assistant';
+    content: string;
+    events?: Event[]; // Optional event data for assistant messages
+    timestamp: Date;
+}
+
+// Render events inline with AI response
+const renderAssistantMessage = (message: ChatMessage) => (
+    <View>
+        <Text>{message.content}</Text>
+        {message.events && (
+            <View style={styles.eventsContainer}>
+                {message.events.map(event => (
+                    <EventCard key={event.id} event={event} />
+                ))}
+            </View>
+        )}
+    </View>
+);
+```
+
+### Event Card Component
+
+The event cards in chat should use the same component as the Events screen:
+
+```typescript
+// Reuse existing EventCard component
+import { EventCard } from '@/components/EventCard';
+
+// In chat message
+{message.events?.map(event => (
+    <EventCard 
+        key={event.id} 
+        event={event}
+        onPress={() => handleEventPress(event)}
+        compact={true} // Optional: more compact for chat
+    />
+))}
+```
+
+### Styling for Chat Context
+
+```typescript
+const styles = StyleSheet.create({
+    eventsContainer: {
+        marginTop: 12,
+        gap: 12,
+    },
+    eventCard: {
+        // Same as Events screen but with chat-specific adjustments
+        marginHorizontal: 0, // Remove horizontal padding in chat
+        borderRadius: 12, // Slightly smaller radius for chat
+    }
+});
 ```
 
 ## Implementation Phases
@@ -318,15 +415,20 @@ Would you like to know more about any of these?"
 
 ### Phase 2: Core Functions
 1. Implement extractUserInterests function
-2. Implement getEventRecommendations function
+2. Implement getEventRecommendations function (returns event data)
 3. Add embedding functionality
 
 ### Phase 3: Tool Integration
 1. Replace current chat API with unified tool-based approach
-2. Test tool calls and responses
-3. Verify conversation flow
+2. Update getRecommendations to return full event objects
+3. Test tool calls and responses
 
-### Phase 4: Optimization
+### Phase 4: UI Integration
+1. Update chat components to display event cards
+2. Implement inline event rendering
+3. Add event card styling to match Events screen
+
+### Phase 5: Optimization
 1. Add caching for embeddings
 2. Optimize recommendation algorithm
 3. Add user feedback collection
@@ -368,3 +470,37 @@ Would you like to know more about any of these?"
 - Interest detection accuracy
 - Recommendation relevance
 - Conversation naturalness
+
+## Error Handling & Edge Cases
+
+### Tool Execution Errors
+- If `extractInterests` fails: Continue conversation without storing interests
+- If `getRecommendations` fails: Return error message, don't show events
+- If embeddings fail: Fall back to popularity-based recommendations
+
+### Empty States
+- No user interests: Show popular events
+- No events available: Show "no events" message
+- No matching events: Show top 3 events anyway (as per requirements)
+
+### Data Validation
+- Validate event data before sending to frontend
+- Handle missing event fields gracefully
+- Ensure event cards render even with incomplete data
+
+## Performance Considerations
+
+### Embedding Optimization
+- Cache embeddings for frequently used keywords
+- Batch embedding requests when possible
+- Consider pre-computing embeddings for event keywords
+
+### Database Queries
+- Optimize user interest queries with proper indexing
+- Use efficient queries for event recommendations
+- Consider pagination for large event sets
+
+### Frontend Performance
+- Lazy load event cards if many events
+- Optimize re-renders with proper React keys
+- Consider virtual scrolling for long chat histories
