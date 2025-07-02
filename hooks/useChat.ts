@@ -3,8 +3,41 @@ import { useChat as useVercelChat } from "ai/react";
 import { useEffect, useState } from "react";
 
 export function useChat() {
-    const [initialMessages, setInitialMessages] = useState([]);
+    const [initialMessages, setInitialMessages] = useState<any[]>([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+
+    // Add a helper to parse raw DB messages into chat-format objects
+    const parseDbMessages = (rawMessages: any[]) => {
+        return rawMessages.map((msg: any) => {
+            let content = msg.content as string;
+            let events: any[] | undefined;
+            let type: string | undefined;
+
+            try {
+                const parsed = JSON.parse(msg.content);
+                if (parsed.type === 'event_cards' && Array.isArray(parsed.events)) {
+                    content = parsed.message || '';
+                    events = parsed.events;
+                    type = parsed.type;
+                } else if (parsed.text && Array.isArray(parsed.events)) {
+                    // legacy shape
+                    content = parsed.text;
+                    events = parsed.events;
+                }
+            } catch {
+                // not JSON, keep as-is
+            }
+
+            return {
+                id: msg.id,
+                role: msg.role,
+                content,
+                events,
+                type,
+                createdAt: new Date(msg.createdAt)
+            } as any;
+        });
+    };
 
     // Load message history from database
     useEffect(() => {
@@ -26,70 +59,7 @@ export function useChat() {
                     const data = await response.json();
                     console.log("GET response data:", data);
                     if (data.messages && data.messages.length > 0) {
-                        // Convert database messages to Vercel AI SDK format
-                        const formattedMessages = data.messages.map((msg: any) => {
-                            // Parse message content to extract events data
-                            let content = msg.content;
-                            let events: any[] | undefined;
-                            let type: string | undefined;
-
-                            console.log('=== MESSAGE PARSING START ===');
-                            console.log('Message ID:', msg.id);
-                            console.log('Message role:', msg.role);
-                            console.log('Raw content:', msg.content);
-                            console.log('Content length:', msg.content?.length);
-
-                            try {
-                                const parsed = JSON.parse(msg.content);
-                                console.log('JSON parse successful');
-                                console.log('Parsed object:', JSON.stringify(parsed, null, 2));
-                                console.log('parsed.type:', parsed.type);
-                                console.log('parsed.events:', parsed.events);
-                                console.log('parsed.message:', parsed.message);
-                                console.log('parsed.text:', parsed.text);
-                                console.log('Array.isArray(parsed.events):', Array.isArray(parsed.events));
-
-                                if (parsed.type === 'event_cards' && Array.isArray(parsed.events)) {
-                                    console.log('MATCH: event_cards type with events array');
-                                    content = parsed.message || '';
-                                    events = parsed.events;
-                                    type = parsed.type;
-                                    console.log('Set content to:', content);
-                                    console.log('Set events to:', events?.length || 0, 'events');
-                                    console.log('Set type to:', type);
-                                } else if (parsed.text && parsed.events && Array.isArray(parsed.events)) {
-                                    console.log('MATCH: legacy format with text and events');
-                                    content = parsed.text;
-                                    events = parsed.events;
-                                    console.log('Set content to:', content);
-                                    console.log('Set events to:', events?.length || 0, 'events');
-                                } else {
-                                    console.log('NO MATCH: Not event_cards format');
-                                }
-                            } catch (e) {
-                                console.log('JSON parse failed:', e);
-                                console.log('Using content as-is');
-                            }
-
-                            const result = {
-                                id: msg.id,
-                                role: msg.role,
-                                content: content,
-                                events: events,
-                                type: type,
-                                createdAt: new Date(msg.createdAt)
-                            };
-
-                            console.log('📤 Final message object:', {
-                                id: result.id,
-                                role: result.role,
-                                type: result.type,
-                                hasEvents: !!result.events,
-                                eventsLength: result.events?.length || 0
-                            });
-
-                            return result;
-                        });
+                        const formattedMessages = parseDbMessages(data.messages);
                         setInitialMessages(formattedMessages);
                         console.log('Loaded', formattedMessages.length, 'messages from database');
                     } else {
@@ -110,30 +80,41 @@ export function useChat() {
         loadMessageHistory();
     }, []);
 
-    return useVercelChat({
+    // Declare a variable so it can be accessed inside onFinish
+    let chatApi: any;
+
+    chatApi = useVercelChat({
         api: "/api/chat",
         initialMessages,
-        // Custom fetch function to include auth headers
+        // When the assistant finishes streaming a response, fetch the updated copy
+        onFinish: async () => {
+            try {
+                const authHeaders = await getAuthHeaders();
+                const res = await fetch('/api/chat', { headers: authHeaders });
+                if (!res.ok) return;
+                const data = await res.json();
+                if (!data.messages) return;
+                const parsed = parseDbMessages(data.messages);
+                if (chatApi?.setMessages) {
+                    chatApi.setMessages(parsed);
+                }
+            } catch (err) {
+                console.error('Failed to refresh messages after finish', err);
+            }
+        },
+        // Custom fetch with auth headers (unchanged)
         fetch: async (url, options) => {
-            console.log("=== Custom fetch for Vercel AI SDK ===");
-            console.log("URL:", url);
-            console.log("Options:", options);
-
-            // Get auth headers
             const authHeaders = await getAuthHeaders();
-            console.log("Auth headers for custom fetch:", authHeaders);
-
-            // Merge auth headers with existing options
-            const finalOptions = {
+            return fetch(url, {
                 ...options,
                 headers: {
                     ...authHeaders,
-                    ...options?.headers,
-                }
-            };
-
-            console.log("Final fetch options:", finalOptions);
-            return fetch(url, finalOptions);
-        }
+                    ...(options?.headers || {}),
+                },
+            });
+        },
     });
+
+    // Return the chat API (which now includes messages, input, etc.)
+    return chatApi;
 } 
