@@ -1,0 +1,239 @@
+# Implementation Checklist: Tool-Based Chat System
+
+## 🎯 **Goal: Replace hardcoded chat logic with proper AI tool calls**
+
+### **Current Problems to Fix:**
+- ❌ Hardcoded `includes('recommend')` string matching
+- ❌ Separate code paths for different request types
+- ❌ Manual flow control instead of AI-driven decisions
+- ❌ Background processing complexity
+- ❌ Duplicated logic and messy code
+
+### **Target Architecture:**
+- ✅ Single `streamText` call with multiple tools
+- ✅ AI decides when to call tools based on conversation
+- ✅ Natural conversation flow
+- ✅ Clean, maintainable code
+
+---
+
+## 📋 **Phase 1: Database Setup**
+
+### **1.1 Create Database Migrations**
+- [ ] Create migration for `user_interest` table
+- [ ] Create migration for `event_keyword` table  
+- [ ] Create migration for `user_event_recommendation` table
+- [ ] Add `keywords` column to existing `event` table
+- [ ] Add interest tracking fields to `user_profile` table
+- [ ] Run migrations and verify schema
+
+### **1.2 Update Type Definitions**
+- [ ] Add `UserInterest` type to `lib/db/types.ts`
+- [ ] Add `EventKeyword` type to `lib/db/types.ts`
+- [ ] Add `UserEventRecommendation` type to `lib/db/types.ts`
+- [ ] Update `Event` type to include `keywords` field
+- [ ] Add `InterestExtractionResult` interface
+
+### **1.3 Manual Keyword Assignment**
+- [ ] Review all seed events in `scripts/seed-events.ts`
+- [ ] Manually assign 3-8 relevant keywords per event
+- [ ] Focus on activities, interests, and specific terms
+- [ ] Include both broad categories and specific activities
+- [ ] Test keyword assignment with sample events
+
+---
+
+## 🔧 **Phase 2: Core Functions**
+
+### **2.1 Interest Extraction Function**
+- [ ] Create `lib/chat-analysis/interest-extraction.ts`
+- [ ] Implement `extractUserInterests()` function
+- [ ] Use `generateText` instead of `streamText` for reliability
+- [ ] Parse JSON response from AI analysis
+- [ ] Store interests in database with confidence/specificity scores
+- [ ] Return conversational summary string
+- [ ] Add error handling and logging
+- [ ] Test with sample messages
+
+### **2.2 Recommendation Engine**
+- [ ] Create `lib/chat-analysis/recommendation-engine.ts`
+- [ ] Implement `getEventRecommendations()` function
+- [ ] Fetch user interests from database
+- [ ] Fetch events (excluding previously shown)
+- [ ] Implement similarity scoring algorithm
+- [ ] Return formatted recommendation string
+- [ ] Add fallback for no events scenario
+- [ ] Test recommendation logic
+
+### **2.3 Embedding Integration**
+- [ ] Install/verify `ai` package for embeddings
+- [ ] Implement `calculateSimilarityScores()` function
+- [ ] Use `embedMany` for batch embedding requests
+- [ ] Use `cosineSimilarity` for comparison
+- [ ] Test embedding functionality
+- [ ] Add caching for performance (optional)
+
+---
+
+## 🤖 **Phase 3: Tool Integration**
+
+### **3.1 Replace Chat API**
+- [ ] Update `app/api/chat/[...all]+api.ts`
+- [ ] Remove hardcoded string matching logic
+- [ ] Remove separate code paths for different request types
+- [ ] Implement single `streamText` call with tools
+- [ ] Add `extractInterests` tool definition
+- [ ] Add `getRecommendations` tool definition
+- [ ] Update system prompt for tool usage
+- [ ] Test basic chat functionality
+
+### **3.2 Tool Definitions**
+- [ ] Define `extractInterests` tool with proper description
+- [ ] Define `getRecommendations` tool with proper description
+- [ ] Set up tool parameters using Zod schemas
+- [ ] Implement tool execution functions
+- [ ] Add proper error handling for tools
+- [ ] Test tool calls independently
+
+### **3.3 Conversation Flow**
+- [ ] Test interest extraction during natural conversation
+- [ ] Test recommendation requests
+- [ ] Verify AI decides when to call tools
+- [ ] Test edge cases and error scenarios
+- [ ] Verify conversation feels natural
+
+---
+
+## 🧪 **Phase 4: Testing & Validation**
+
+### **4.1 Unit Testing**
+- [ ] Test `extractUserInterests()` function
+- [ ] Test `getEventRecommendations()` function
+- [ ] Test database operations
+- [ ] Test embedding calculations
+- [ ] Test error handling scenarios
+
+### **4.2 Integration Testing**
+- [ ] Test end-to-end conversation flow
+- [ ] Test tool call integration
+- [ ] Test interest extraction from various message types
+- [ ] Test recommendation requests
+- [ ] Test conversation continuity
+
+### **4.3 User Experience Testing**
+- [ ] Test natural conversation flow
+- [ ] Verify interest detection accuracy
+- [ ] Test recommendation relevance
+- [ ] Verify AI responses feel conversational
+- [ ] Test edge cases (no interests, no events, etc.)
+
+---
+
+## 🚀 **Phase 5: Deployment & Monitoring**
+
+### **5.1 Production Deployment**
+- [ ] Deploy database migrations
+- [ ] Deploy updated chat API
+- [ ] Test in production environment
+- [ ] Monitor for errors and performance
+- [ ] Verify all functionality works
+
+### **5.2 Monitoring & Logging**
+- [ ] Add comprehensive logging for tool calls
+- [ ] Monitor interest extraction success rate
+- [ ] Monitor recommendation quality
+- [ ] Track conversation flow metrics
+- [ ] Set up error alerting
+
+### **5.3 Performance Optimization**
+- [ ] Optimize database queries
+- [ ] Add caching for embeddings
+- [ ] Monitor API response times
+- [ ] Optimize tool execution
+- [ ] Add rate limiting if needed
+
+---
+
+## ✅ **Success Criteria**
+
+### **Functional Requirements**
+- [ ] AI can extract interests from natural conversation
+- [ ] AI can provide personalized recommendations
+- [ ] No hardcoded string matching
+- [ ] Single code path for all chat interactions
+- [ ] Natural conversation flow maintained
+
+### **Technical Requirements**
+- [ ] All tools work reliably
+- [ ] Database operations complete successfully
+- [ ] Error handling works properly
+- [ ] Performance is acceptable
+- [ ] Code is clean and maintainable
+
+### **User Experience Requirements**
+- [ ] Conversations feel natural
+- [ ] Interest extraction happens seamlessly
+- [ ] Recommendations are relevant
+- [ ] No hanging or timeout issues
+- [ ] Responses are conversational and helpful
+
+---
+
+## 🐛 **Known Issues to Address**
+
+### **Current Issues**
+- [ ] Hardcoded `includes('recommend')` logic
+- [ ] Separate code paths for different request types
+- [ ] Background processing complexity
+- [ ] Manual flow control
+- [ ] Duplicated logic
+
+### **Potential Issues**
+- [ ] Tool call reliability
+- [ ] Database performance with many interests
+- [ ] Embedding API rate limits
+- [ ] Conversation context management
+- [ ] Error handling edge cases
+
+---
+
+## 📝 **Implementation Notes**
+
+### **Key Decisions**
+- Use `generateText` for interest extraction (more reliable than `streamText`)
+- Return conversational strings from tools (not structured data)
+- Let AI handle all conversation flow decisions
+- Keep tool definitions simple and focused
+
+### **Dependencies**
+- `@ai-sdk/openai` - Already installed
+- `ai` - Already installed (provides `embedMany`, `cosineSimilarity`)
+- `zod` - Already installed (for tool parameter validation)
+
+### **Files to Modify**
+- `app/api/chat/[...all]+api.ts` - Complete rewrite
+- `lib/chat-analysis/interest-extraction.ts` - New file
+- `lib/chat-analysis/recommendation-engine.ts` - New file
+- `lib/db/schema.ts` - Add new tables
+- `lib/db/types.ts` - Add new types
+- `scripts/seed-events.ts` - Add keywords
+
+### **Files to Remove**
+- `app/api/chat/analyze-interests/+api.ts` - No longer needed
+- `app/api/chat/recommendations/+api.ts` - No longer needed
+- `app/api/chat/recommendation-feedback/+api.ts` - No longer needed
+
+---
+
+## 🎉 **Completion Checklist**
+
+- [ ] All database migrations applied
+- [ ] All core functions implemented and tested
+- [ ] Chat API rewritten with tool-based approach
+- [ ] All tests passing
+- [ ] Production deployment successful
+- [ ] Monitoring and logging in place
+- [ ] Performance meets requirements
+- [ ] User experience validated
+- [ ] Documentation updated
+- [ ] Team trained on new architecture

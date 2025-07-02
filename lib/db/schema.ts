@@ -1,4 +1,4 @@
-import { boolean, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, decimal, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
     id: text('id').primaryKey(),
@@ -80,6 +80,7 @@ export const event = pgTable("event", {
     location: jsonb("location").notNull(), // { lat: number, lng: number, neighborhood?: string }
     description: text("description").notNull(),
     categories: text("categories").array().notNull(), // Array of categories instead of single category
+    keywords: text("keywords").array().default([]), // Array of keywords for semantic matching
     hostId: text("host_id").references(() => user.id), // Optional - for user-hosted events
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -96,6 +97,8 @@ export const userProfile = pgTable("user_profile", {
     location: jsonb("location").notNull(), // { lat: number, lng: number }
     interests: text("interests").array(), // Array of interest tags
     preferences: jsonb("preferences").notNull(), // { distance_radius_km: number, preferred_categories: string[] }
+    lastInterestAnalysis: timestamp("last_interest_analysis", { withTimezone: true }),
+    interestAnalysisVersion: integer("interest_analysis_version").default(1),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
@@ -126,6 +129,39 @@ export const eventInteraction = pgTable("event_interaction", {
     // This will be handled in the application layer or with a unique index
 });
 
+// Chat Analysis Tables
+
+// User interests table
+export const userInterest = pgTable("user_interest", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: 'cascade' }),
+    keyword: text("keyword").notNull(),
+    confidenceScore: decimal("confidence_score", { precision: 3, scale: 2 }).notNull(),
+    specificityScore: decimal("specificity_score", { precision: 3, scale: 2 }).notNull(),
+    sourceMessageId: uuid("source_message_id").references(() => message.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// Event keywords table
+export const eventKeyword = pgTable("event_keyword", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    eventId: uuid("event_id").notNull().references(() => event.id, { onDelete: 'cascade' }),
+    keyword: text("keyword").notNull(),
+    weight: decimal("weight", { precision: 3, scale: 2 }).default("1.00").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+// User event recommendations table
+export const userEventRecommendation = pgTable("user_event_recommendation", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: 'cascade' }),
+    eventId: uuid("event_id").notNull().references(() => event.id, { onDelete: 'cascade' }),
+    recommendationScore: decimal("recommendation_score", { precision: 5, scale: 4 }).notNull(),
+    shownAt: timestamp("shown_at", { withTimezone: true }).defaultNow().notNull(),
+    userFeedback: text("user_feedback"), // 'interested', 'not_interested', 'going', null
+});
+
 export const schema = {
     user,
     session,
@@ -134,5 +170,8 @@ export const schema = {
     message,
     event,
     userProfile,
-    eventInteraction
+    eventInteraction,
+    userInterest,
+    eventKeyword,
+    userEventRecommendation
 }

@@ -1,289 +1,370 @@
-# Chat Analysis & Event Matching - Technical Specification
+# Chat Analysis & Event Recommendation System Technical Specification
 
 ## Overview
-Enhance the AI chat interface to intelligently match users with relevant events based on their interests and conversation context. The system will extract user preferences, match them against event keywords using semantic search, and present personalized event recommendations in the chat interface.
 
-## Core Architecture
+This document outlines the technical implementation of a chat analysis system that extracts user interests from conversations and provides personalized event recommendations using AI-powered analysis and semantic matching with **proper tool calls**.
 
-### 1. Database Schema Changes
+## System Architecture
 
-#### Events Table Enhancement
+### Core Components
+
+1. **Interest Extraction Tool** - AI tool that analyzes user messages for expressed interests
+2. **Event Recommendation Tool** - AI tool that provides personalized event suggestions
+3. **Database Schema Extensions** - New tables and fields for interest tracking
+4. **AI Integration** - Vercel AI SDK with proper tool calls
+5. **Unified Chat Flow** - Single streamText call with multiple tools
+
+## Database Schema Changes
+
+### New Tables Required
+
+#### 1. `user_interest` Table
 ```sql
--- Add keywords field to existing event table
-ALTER TABLE event ADD COLUMN keywords TEXT[] DEFAULT '{}';
-ALTER TABLE event ADD COLUMN keyword_scores JSONB DEFAULT '{}';
+CREATE TABLE user_interest (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+    keyword TEXT NOT NULL,
+    confidence_score DECIMAL(3,2) NOT NULL CHECK (confidence_score >= 0 AND confidence_score <= 1),
+    specificity_score DECIMAL(3,2) NOT NULL CHECK (specificity_score >= 0 AND specificity_score <= 1),
+    source_message_id UUID REFERENCES message(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(user_id, keyword)
+);
 ```
 
-#### User Profile Enhancement
+#### 2. `event_keyword` Table
 ```sql
--- Add interests field to existing user_profile table
-ALTER TABLE user_profile ADD COLUMN interests JSONB DEFAULT '{}';
-ALTER TABLE user_profile ADD COLUMN interest_scores JSONB DEFAULT '{}';
-ALTER TABLE user_profile ADD COLUMN last_interest_update TIMESTAMP DEFAULT NOW();
+CREATE TABLE event_keyword (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id UUID NOT NULL REFERENCES event(id) ON DELETE CASCADE,
+    keyword TEXT NOT NULL,
+    weight DECIMAL(3,2) DEFAULT 1.0 CHECK (weight >= 0 AND weight <= 1),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(event_id, keyword)
+);
 ```
 
-#### New Table: Event Recommendations
+#### 3. `user_event_recommendation` Table
 ```sql
--- Track which events have been recommended to users
-CREATE TABLE event_recommendation (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+CREATE TABLE user_event_recommendation (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
     event_id UUID NOT NULL REFERENCES event(id) ON DELETE CASCADE,
-    recommended_at TIMESTAMP DEFAULT NOW(),
-    context TEXT, -- Store the conversation context that triggered this recommendation
+    recommendation_score DECIMAL(5,4) NOT NULL,
+    shown_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    user_feedback TEXT, -- 'interested', 'not_interested', 'going', null
     UNIQUE(user_id, event_id)
 );
 ```
 
-### 2. Data Structure Definitions
+### Schema Modifications
 
-#### User Interests Format
+#### 1. Update `event` Table
+Add keywords field to existing events:
+```sql
+ALTER TABLE event ADD COLUMN keywords TEXT[] DEFAULT '{}';
+```
+
+#### 2. Update `user_profile` Table
+Add interest tracking fields:
+```sql
+ALTER TABLE user_profile ADD COLUMN last_interest_analysis TIMESTAMP WITH TIME ZONE;
+ALTER TABLE user_profile ADD COLUMN interest_analysis_version INTEGER DEFAULT 1;
+```
+
+## AI Tool Implementation
+
+### Tool 1: Extract Interests Tool
+
+**Purpose**: Analyze user messages for expressed interests and store them in the database.
+
+**Tool Definition**:
 ```typescript
-interface UserInterests {
-  broad: string[];        // e.g., ["fitness", "social", "technology"]
-  specific: string[];     // e.g., ["morning running", "coffee networking", "coding workshops"]
-  scores: Record<string, number>; // Confidence scores 0-1
-  lastUpdated: Date;
-}
+extractInterests: tool({
+    description: "Extract user interests from messages when users share hobbies, activities, or preferences. Call this to learn about what users enjoy.",
+    parameters: z.object({
+        userMessage: z.string().describe('The user message to analyze for interests'),
+    }),
+    execute: async ({ userMessage }) => {
+        // 1. Use OpenAI to analyze message for interests
+        // 2. Store interests in database
+        // 3. Return summary of what was learned
+    }
+})
 ```
 
-#### Event Keywords Format
+**Implementation**:
 ```typescript
-interface EventKeywords {
-  keywords: string[];     // e.g., ["running", "fitness", "morning", "cardio", "outdoor"]
-  scores: Record<string, number>; // Relevance scores 0-1
+async function extractUserInterests(message: string, userId: string, messageId: string): Promise<string> {
+    // 1. Use OpenAI to analyze message for interests
+    const result = await generateText({
+        model: openai('gpt-4o-mini'),
+        messages: [
+            {
+                role: 'system',
+                content: `Analyze the following user message for expressed interests, hobbies, activities, or preferences. 
+Return a JSON object with:
+- interests: array of interest objects with keyword, confidence_score (0-1), and specificity_score (0-1)
+- has_interests: boolean indicating if any interests were found
+
+Guidelines:
+- confidence_score: How certain you are this is an actual interest (not just mentioned)
+- specificity_score: How specific/niche the interest is (e.g., "rock climbing" vs "sports")
+- Extract both explicit ("I love hiking") and implicit ("I'm training for a marathon") interests
+- Focus on activities, hobbies, skills, and preferences that could relate to events
+- Ignore dislikes or negative preferences for now (MVP scope)
+
+Message: "${message}"
+
+Return only valid JSON.`
+            }
+        ]
+    });
+
+    // 2. Parse and store interests
+    const parsed = JSON.parse(result.text);
+    if (parsed.has_interests && parsed.interests.length > 0 && db) {
+        for (const interest of parsed.interests) {
+            await db.insert(userInterest).values({
+                userId: userId,
+                keyword: interest.keyword,
+                confidenceScore: interest.confidence_score.toString(),
+                specificityScore: interest.specificity_score.toString(),
+                sourceMessageId: messageId
+            });
+        }
+    }
+
+    // 3. Return conversational summary
+    if (parsed.has_interests && parsed.interests.length > 0) {
+        const interests = parsed.interests.map(i => i.keyword).join(', ');
+        return `I learned that you're interested in: ${interests}. I'll keep this in mind for future recommendations!`;
+    } else {
+        return `I didn't detect any specific interests in that message, but I'm here to learn more about what you enjoy!`;
+    }
 }
 ```
 
-### 3. Implementation Components
+### Tool 2: Get Recommendations Tool
 
-#### A. Keyword Generation Script
-**File**: `scripts/generate-event-keywords.ts`
+**Purpose**: Provide personalized event recommendations based on user interests.
 
-**Purpose**: Extract keywords from existing events using AI
-**Process**:
-1. Fetch all events from database
-2. Send event title + description to OpenAI
-3. Request structured keyword extraction with relevance scores
-4. Update database with keywords and scores
-
-**AI Prompt**:
-```
-Extract relevant keywords from this event that would help match it to user interests.
-Return as JSON: {
-  "keywords": ["keyword1", "keyword2", ...],
-  "scores": {"keyword1": 0.9, "keyword2": 0.7, ...}
-}
-
-Event: {title} - {description}
-```
-
-#### B. Enhanced Chat API
-**File**: `app/api/chat/[...all]+api.ts`
-
-**New Flow**:
-1. Receive user message
-2. Check if user has recent interests (within 24h)
-3. If not, or if new information detected, run interest extraction
-4. Perform semantic matching against events
-5. Generate response with events (if relevant)
-6. Update user interests and recommendation history
-
-#### C. Interest Extraction Service
-**File**: `lib/services/interest-extraction.ts`
-
-**Purpose**: Extract and update user interests from conversation
-**Features**:
-- Analyze current message + recent context
-- Update existing interests or add new ones
-- Maintain confidence scores
-- Handle interest conflicts/updates
-
-#### D. Event Matching Service
-**File**: `lib/services/event-matching.ts`
-
-**Purpose**: Match user interests to events using AI-powered semantic similarity
-**Algorithm**:
-1. Use AI to calculate similarity scores between user interests and event keywords
-2. Apply popularity weighting (attendees + interested)
-3. Filter out previously recommended events
-4. Return ranked results with similarity scores
-
-**Similarity Calculation**:
+**Tool Definition**:
 ```typescript
-// For each user interest vs event keyword combination
-const similarityPrompt = `
-Rate the similarity between these interests (0-1):
-User Interest: "${userInterest}"
-Event Keywords: ${eventKeywords.join(', ')}
-
-Consider related activities, synonyms, and broader categories.
-Return only a number between 0 and 1.
-`;
+getRecommendations: tool({
+    description: "Get personalized event recommendations when users ask for suggestions, events, or activities. Call this to provide relevant event suggestions.",
+    parameters: z.object({
+        userMessage: z.string().describe('The user message requesting recommendations'),
+    }),
+    execute: async ({ userMessage }) => {
+        // 1. Fetch user interests and events
+        // 2. Calculate similarity scores
+        // 3. Return formatted recommendations
+    }
+})
 ```
 
-#### E. Chat UI Enhancement
-**File**: `components/EventCard.tsx` (new reusable component)
-**File**: `app/(tabs)/chat.tsx` (enhanced)
+**Implementation**:
+```typescript
+async function getEventRecommendations(userId: string, limit: number = 3): Promise<string> {
+    // 1. Fetch user interests
+    const userInterests = await db
+        .select()
+        .from(userInterest)
+        .where(eq(userInterest.userId, userId));
 
-**Features**:
-- Extract event card rendering logic from events page
-- Support for inline event cards in chat
-- Maintain identical styling to main events page
+    // 2. Fetch events (excluding previously shown)
+    const events = await db
+        .select()
+        .from(event)
+        .where(/* exclude shown events */);
 
-### 4. AI System Prompts
+    // 3. Calculate similarity scores using embeddings
+    const scores = await calculateSimilarityScores(
+        userInterests.map(i => i.keyword),
+        events.map(e => e.keywords).flat()
+    );
 
-#### Interest Extraction Prompt
-```
-You are a helpful assistant analyzing user conversations to understand their interests and preferences for events.
+    // 4. Apply scoring formula and return top results
+    const recommendations = events
+        .map((event, index) => ({
+            event,
+            score: scores[index]
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
 
-Extract interests from this message and conversation context. Return as JSON:
-{
-  "newInterests": {
-    "broad": ["category1", "category2"],
-    "specific": ["specific_interest1", "specific_interest2"]
-  },
-  "confidence": 0.8,
-  "shouldUpdate": true/false
+    // 5. Return conversational response
+    if (recommendations.length > 0) {
+        const eventList = recommendations.map(r => 
+            `• ${r.event.title} - ${r.event.description}`
+        ).join('\n');
+        return `Here are some events that might interest you:\n\n${eventList}\n\nWould you like to know more about any of these?`;
+    } else {
+        return `I don't have any events to recommend right now, but I'm working on finding more activities that match your interests!`;
+    }
 }
-
-Consider:
-- Categories: fitness, social, creative, technology, education, food, music, outdoors, business
-- Activity levels: beginner, intermediate, advanced
-- Skill requirements: none, some experience, expert level
-- Social preferences: group activities, solo activities, networking
-
-Message: {userMessage}
-Recent Context: {recentMessages}
 ```
 
-#### Event Recommendation Prompt
+## Unified Chat API Implementation
+
+### Single streamText Call with Tools
+
+```typescript
+export async function POST(req: Request) {
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session?.user?.id) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+
+    const { messages } = await req.json();
+    
+    // Save user message
+    const [savedMessage] = await db.insert(message).values({
+        userId: session.user.id,
+        content: messages[messages.length - 1].content,
+        role: "user"
+    }).returning({ id: message.id });
+
+    const result = streamText({
+        model: openai('gpt-4o-mini'),
+        messages: [
+            {
+                role: "system",
+                content: `You are a friendly and helpful assistant that helps users discover events and activities. 
+
+IMPORTANT GUIDELINES:
+- Be conversational, warm, and engaging in your responses
+- When users share their interests, hobbies, or activities, use the extractInterests tool to learn about them
+- When users ask for recommendations, suggestions, or events, use the getRecommendations tool
+- Ask follow-up questions to understand their preferences better
+- Keep responses natural and conversational - don't sound like a robot
+- Always acknowledge when you learn new interests about them
+
+Your goal is to help users discover events that match their interests by having natural conversations and understanding what they enjoy.`
+            },
+            ...messages,
+        ],
+        tools: {
+            extractInterests: tool({
+                description: "Extract user interests from messages when users share hobbies, activities, or preferences. Call this to learn about what users enjoy.",
+                parameters: z.object({
+                    userMessage: z.string().describe('The user message to analyze for interests'),
+                }),
+                execute: async ({ userMessage }) => {
+                    return extractUserInterests(userMessage, session.user.id, savedMessage.id);
+                }
+            }),
+            getRecommendations: tool({
+                description: "Get personalized event recommendations when users ask for suggestions, events, or activities. Call this to provide relevant event suggestions.",
+                parameters: z.object({
+                    userMessage: z.string().describe('The user message requesting recommendations'),
+                }),
+                execute: async ({ userMessage }) => {
+                    return getEventRecommendations(session.user.id, 3);
+                }
+            })
+        },
+        onFinish: async (completion) => {
+            // Save AI response
+            await db.insert(message).values({
+                userId: session.user.id,
+                content: completion.text,
+                role: "assistant"
+            });
+        },
+    });
+
+    return result.toDataStreamResponse();
+}
 ```
-You are a friendly event recommendation assistant. You know about all local events and want to help users find activities they'll enjoy.
 
-When recommending events:
-- Be conversational and enthusiastic
-- Ask clarifying questions if too many events match (continue until you have 3 or fewer clear matches)
-- Focus on category, activity level, and skill requirements
-- Don't mention time/location (handled separately)
-- Limit to 3 events maximum
+## Data Flow
 
-If you have good matches, include them in your response like this:
-<events>
-[{"id": "event_id", "title": "Event Title", "description": "Description", "categories": ["category1"], "attendeesCount": 5, "interestedCount": 3, "location": {"neighborhood": "Area"}}]
-</events>
+### Natural Conversation Flow
+1. User sends message
+2. Message saved to database
+3. AI analyzes message and decides what tools to call
+4. If interests detected → calls extractInterests tool
+5. If recommendations requested → calls getRecommendations tool
+6. AI responds conversationally with tool results
+7. AI response saved to database
 
-If you don't have enough information about the user's interests, tell them you need to learn more about what they enjoy.
+### Tool Call Examples
 
-User Interests: {userInterests}
-Available Events: {matchedEvents}
+**User says:** "I love rock climbing and hiking"
+```
+AI: "That's awesome! I love that you're into outdoor activities. I learned that you're interested in: rock climbing, hiking. I'll keep this in mind for future recommendations!"
 ```
 
-### 5. Implementation Steps
+**User says:** "Can you recommend some events?"
+```
+AI: "Absolutely! Here are some events that might interest you:
 
-#### Phase 1: Database & Data Preparation
-1. **Database Migrations**
-   - Add keywords and scores to events table
-   - Add interests and scores to user_profile table
-   - Create event_recommendation table
+• Morning Running Club - Join our weekly running group! All paces welcome.
+• Outdoor Adventure Meetup - Hiking and rock climbing for all skill levels.
+• Weekend Hiking Group - Explore local trails with fellow outdoor enthusiasts.
 
-2. **Keyword Generation**
-   - Create and run keyword generation script
-   - Populate keywords for all existing events
-   - Validate keyword quality
+Would you like to know more about any of these?"
+```
 
-#### Phase 2: Core Services
-1. **Interest Extraction Service**
-   - Implement interest analysis logic
-   - Create user interest update functions
-   - Add confidence scoring
+## Implementation Phases
 
-2. **Event Matching Service**
-   - Implement semantic matching algorithm
-   - Add popularity weighting
-   - Create recommendation tracking
+### Phase 1: Database Setup
+1. Create database migrations
+2. Manually assign keywords to seed events
+3. Test database schema
 
-#### Phase 3: API Enhancement
-1. **Enhanced Chat API**
-   - Integrate interest extraction
-   - Add event matching logic
-   - Implement structured responses
+### Phase 2: Core Functions
+1. Implement extractUserInterests function
+2. Implement getEventRecommendations function
+3. Add embedding functionality
 
-2. **Response Format**
-   - Support mixed text/event responses
-   - Handle clarifying questions
-   - Manage recommendation history
+### Phase 3: Tool Integration
+1. Replace current chat API with unified tool-based approach
+2. Test tool calls and responses
+3. Verify conversation flow
 
-#### Phase 4: UI Implementation
-1. **Event Card Component**
-   - Extract reusable component from events page
-   - Ensure identical styling
-   - Add chat-specific interactions
+### Phase 4: Optimization
+1. Add caching for embeddings
+2. Optimize recommendation algorithm
+3. Add user feedback collection
 
-2. **Chat UI Enhancement**
-   - Support event card rendering
-   - Handle mixed message types
-   - Maintain chat flow
+## Key Benefits of Tool-Based Approach
 
-### 6. Technical Considerations
+1. **Natural conversation flow** - AI decides when to extract interests or get recommendations
+2. **No hardcoded logic** - No more `includes('recommend')` bullshit
+3. **Single code path** - One streamText call handles everything
+4. **Better user experience** - AI can extract interests naturally during conversation
+5. **Easier to extend** - Just add new tools as needed
+6. **Cleaner code** - Each tool has one job, clear separation of concerns
 
-#### Performance
-- **Caching**: Cache user interests for 24h
-- **Batch Processing**: Process keywords generation in batches
-- **Indexing**: Add database indexes on keywords and interests
-- **Query Optimization**: Use efficient semantic search queries
+## Error Handling
 
-#### Scalability
-- **Semantic Search**: Start with AI similarity scoring, upgrade to embeddings later
-- **Rate Limiting**: Limit interest extraction frequency
-- **Background Jobs**: Move keyword generation to background process
-- **Caching**: Cache similarity scores for common interest/keyword combinations
+### Tool Execution Errors
+- Graceful degradation if tools fail
+- Fallback responses for recommendation failures
+- Log errors for debugging
 
-#### Error Handling
-- **No User Data**: Inform user we need more information about their interests
-- **No Matches**: Show popular events as fallback
-- **Partial Failures**: Continue chat even if event matching fails
-- **Data Validation**: Validate AI responses before database updates
+### Conversation Flow
+- AI handles edge cases naturally
+- No manual flow control needed
+- Tool calls are optional and contextual
 
-### 7. Testing Strategy
+## Testing Strategy
 
-#### Unit Tests
-- Interest extraction accuracy
-- Event matching algorithm
-- Keyword generation quality
+### Tool Testing
+- Test each tool independently
+- Verify database operations
+- Test error scenarios
 
-#### Integration Tests
-- End-to-end chat flow with events
-- Database consistency
-- API response formats
+### Integration Testing
+- End-to-end conversation flow
+- Tool call integration
+- Natural language understanding
 
-#### Manual Testing
-- Conversation flow quality
-- Event recommendation relevance
-- UI consistency between chat and events page
-
-### 8. Success Metrics
-
-- **Relevance**: User engagement with recommended events
-- **Accuracy**: Interest extraction precision
-- **Performance**: Response time for event matching
-- **User Experience**: Natural conversation flow
-
-## Next Steps
-
-1. **Database Migration**: Create and run migration scripts
-2. **Keyword Generation**: Implement and run keyword extraction
-3. **Core Services**: Build interest extraction and event matching
-4. **API Enhancement**: Update chat API with new functionality
-5. **UI Implementation**: Create reusable event card component
-6. **Testing**: Comprehensive testing of all components
-7. **Deployment**: Gradual rollout with monitoring
-
-## Timeline Estimate
-
-- **Phase 1**: 1 day (database + keywords)
-- **Phase 2**: 1 day (core services)
-- **Phase 3**: 0.5 day (API enhancement)
-- **Phase 4**: 0.5 day (UI implementation)
-- **Testing**: 0.5 day
-- **Total**: 3.5 days (fits within 3-day constraint with some buffer)
+### User Testing
+- Interest detection accuracy
+- Recommendation relevance
+- Conversation naturalness
