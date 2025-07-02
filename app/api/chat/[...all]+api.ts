@@ -59,6 +59,7 @@ IMPORTANT GUIDELINES:
 - Ask follow-up questions to understand their preferences better
 - Keep responses natural and conversational - don't sound like a robot
 - Always acknowledge when you learn new interests about them
+- Dont offer specific information outside of tool calls
 
 Your goal is to help users discover events that match their interests by having natural conversations and understanding what they enjoy.`
             },
@@ -66,7 +67,28 @@ Your goal is to help users discover events that match their interests by having 
         ],
         tools: {
             extractInterests: tool({
-                description: "Extract user interests from messages when users share hobbies, activities, or preferences. Return structured data about detected interests.",
+                description: `Extract as many relevant user interests from messages when users share hobbies, activities, or preferences(max 3 interests that weren't explicitly mentioned i.e. if the say "I love Alex Honnold" do extract "climbing", "free soloing", " sports documentaries" as an interest, but not more than 3 unmentioned things, also only include unmentioned items when the mentioned item is highly specific(>=0.75)). 
+
+EXAMPLES:
+"I love rock climbing and hiking" → [{"keyword": "rock climbing", "confidence": 0.8, "specificity": 0.6}, {"keyword": "hiking", "confidence": 0.8, "specificity": 0.6}]
+"I sometimes go to concerts" → [{"keyword": "concerts", "confidence": 0.5, "specificity": 0.4}]
+"I'm learning to play guitar" → [{"keyword": "guitar", "confidence": 0.7, "specificity": 0.5}]
+"My friend is a photographer" → [{"keyword": "photography", "confidence": 0.2, "specificity": 0.5}]
+"I enjoy cooking Italian food" → [{"keyword": "cooking", "confidence": 0.7, "specificity": 0.5}, {"keyword": "Italian food", "confidence": 0.6, "specificity": 0.7}]
+"I used to play basketball in college" → [{"keyword": "basketball", "confidence": 0.4, "specificity": 0.6}]
+"I'm really into indie music" → [{"keyword": "indie music", "confidence": 0.8, "specificity": 0.6}]
+"I've been thinking about trying yoga" → [{"keyword": "yoga", "confidence": 0.3, "specificity": 0.5}]
+"I want to go clubbing" → [{"keyword": "clubbing", "confidence": 0.9, "specificity": 0.6}]
+"I can't live without coffee" → [{"keyword": "coffee", "confidence": 0.8, "specificity": 0.4}]
+"I hate running" → []
+"I went to a Arvo Pärt concert last week" → [{"keyword": "Arvo Pärt", "confidence": 0.6, "specificity": 0.9}, {"keyword": "classical music", "confidence": 0.6, "specificity": 0.6}, {"keyword": "minimalist music", "confidence": 0.5, "specificity": 0.8}, {"keyword": "concerts", "confidence": 0.5, "specificity": 0.4}]
+"I'm not really into sports" → []
+"I love Guillermo del Toro movies" → [{"keyword": "Guillermo del Toro", "confidence": 0.8, "specificity": 0.9}, {"keyword": "fantasy films", "confidence": 0.5, "specificity": 0.6}, {"keyword": "foreign films", "confidence": 0.4, "specificity": 0.6}, {"keyword": "movies", "confidence": 0.8, "specificity": 0.4}]
+"I'm a huge fan of David Bowie" → [{"keyword": "David Bowie", "confidence": 0.8, "specificity": 0.9}, {"keyword": "rock music", "confidence": 0.7, "specificity": 0.5}, {"keyword": "glam rock", "confidence": 0.6, "specificity": 0.8}, {"keyword": "experimental music", "confidence": 0.5, "specificity": 0.7}]
+"I am reading a Murakami novel" → [{"keyword": "Murakami", "confidence": 0.6, "specificity": 0.9}, {"keyword": "Japanese literature", "confidence": 0.4, "specificity": 0.7}, {"keyword": "magical realism", "confidence": 0.3, "specificity": 0.8}, {"keyword": "reading", "confidence": 0.8, "specificity": 0.4}]
+"I'm into craft beer and IPAs" → [{"keyword": "craft beer", "confidence": 0.6, "specificity": 0.7}, {"keyword": "beer tasting", "confidence": 0.5, "specificity": 0.6}, {"keyword": "brewing", "confidence": 0.4, "specificity": 0.7}]
+
+Focus on activities, hobbies, skills, and preferences that could relate to events. Extract semantic interests that could match events, not just literal keywords.`,
                 parameters: z.object({
                     interests: z.array(z.object({
                         keyword: z.string().describe('The interest keyword'),
@@ -110,7 +132,7 @@ Your goal is to help users discover events that match their interests by having 
                 }
             }),
             getRecommendations: tool({
-                description: "Get personalized event recommendations when users ask for suggestions, events, or activities. Call this to provide relevant event suggestions.",
+                description: "Get personalized event recommendations when users EXPLICITLY ask for suggestions, events, or activities. Call this to provide relevant event suggestions.",
                 parameters: z.object({
                     userMessage: z.string().describe('The user message requesting recommendations'),
                 }),
