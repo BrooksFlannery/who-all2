@@ -1,14 +1,40 @@
+import { Event, Location } from '../db/types';
 import { fetchAvailableEvents, fetchUserInterests, recordShownRecommendation } from './db-helpers';
 import { calculateSimilarityScores } from './embeddings';
 
+// New interface for recommendation responses
+export interface RecommendationResponse {
+    events: Event[];
+    message: string;
+    success: boolean;
+    error?: string;
+}
+
+// Helper function to convert database event to Event type
+function convertDbEventToEvent(dbEvent: any): Event {
+    return {
+        id: dbEvent.id,
+        title: dbEvent.title,
+        date: dbEvent.date,
+        location: dbEvent.location as Location,
+        description: dbEvent.description,
+        categories: dbEvent.categories as any as Event['categories'],
+        hostId: dbEvent.hostId || undefined,
+        createdAt: dbEvent.createdAt,
+        updatedAt: dbEvent.updatedAt,
+        attendeesCount: dbEvent.attendeesCount,
+        interestedCount: dbEvent.interestedCount,
+    };
+}
+
 /**
  * Get personalized event recommendations for a user based on their interests.
- * Returns a conversational string with formatted recommendations.
+ * Returns full event objects with a conversational message.
  */
 export async function getEventRecommendations(
     userId: string,
     limit: number = 3
-): Promise<string> {
+): Promise<RecommendationResponse> {
     try {
         console.log(`🎪 Getting recommendations for user ${userId}`);
 
@@ -24,7 +50,11 @@ export async function getEventRecommendations(
 
         if (availableEvents.length === 0) {
             console.log("❌ No events available");
-            return "I don't have any events to recommend right now, but I'm working on finding more activities that match your interests!";
+            return {
+                events: [],
+                message: "I don't have any events to recommend right now, but I'm working on finding more activities that match your interests!",
+                success: true
+            };
         }
 
         // If user has no interests, fall back to popular events
@@ -39,12 +69,12 @@ export async function getEventRecommendations(
                 await recordShownRecommendation(userId, event.id, 0.5); // Default score for popular events
             }
 
-            const eventList = popularEvents.map(event =>
-                `• ${event.title} - ${event.description}`
-            ).join('\n');
-
             console.log(`✅ Recommended ${popularEvents.length} popular events`);
-            return `Here are some popular events you might enjoy:\n\n${eventList}\n\nWould you like to know more about any of these?`;
+            return {
+                events: popularEvents.map(convertDbEventToEvent),
+                message: `Here are some popular events you might enjoy!`,
+                success: true
+            };
         }
 
         // Calculate similarity scores for events with keywords
@@ -70,12 +100,12 @@ export async function getEventRecommendations(
                 await recordShownRecommendation(userId, event.id, 0.5);
             }
 
-            const eventList = popularEvents.map(event =>
-                `• ${event.title} - ${event.description}`
-            ).join('\n');
-
             console.log(`✅ Recommended ${popularEvents.length} popular events (fallback)`);
-            return `Here are some popular events you might enjoy:\n\n${eventList}\n\nWould you like to know more about any of these?`;
+            return {
+                events: popularEvents.map(convertDbEventToEvent),
+                message: `Here are some popular events you might enjoy!`,
+                success: true
+            };
         }
 
         // Calculate similarity scores
@@ -154,18 +184,27 @@ export async function getEventRecommendations(
         if (topEvents.length === 0) {
             console.log("❌ No matching events found");
             console.log("🔍 Debug: eventScores array is empty, which means no events passed the similarity threshold");
-            return "I couldn't find any events that match your interests right now, but I'm working on finding more activities for you!";
+            return {
+                events: [],
+                message: "I couldn't find any events that match your interests right now, but I'm working on finding more activities for you!",
+                success: true
+            };
         }
 
-        const eventList = topEvents.map(({ event, score, matchReasons }) =>
-            `• ${event.title} - ${event.description}`
-        ).join('\n');
-
         console.log(`✅ Recommended ${topEvents.length} personalized events`);
-        return `Here are some events that match your interests:\n\n${eventList}\n\nWould you like to know more about any of these?`;
+        return {
+            events: topEvents.map(({ event }) => convertDbEventToEvent(event)),
+            message: `I found ${topEvents.length} events that might interest you!`,
+            success: true
+        };
 
     } catch (error) {
         console.error('❌ Error in getEventRecommendations:', error);
-        return "I'm having trouble finding events right now, but I'm working on it!";
+        return {
+            events: [],
+            message: "I'm having trouble finding events right now, but I'm working on it!",
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
     }
 } 

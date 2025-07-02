@@ -1,5 +1,7 @@
+import { EventCard } from '@/components/EventCard';
 import { ThemedText } from '@/components/ThemedText';
 import { useChat } from '@/hooks/useChat';
+import { Event } from '@/lib/db/types';
 import React from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
@@ -11,20 +13,79 @@ export default function ChatScreen() {
     handleInputChange({ target: { value: text } } as any);
   };
 
+  // Handle event card press
+  const handleEventPress = (event: Event) => {
+    // TODO: Navigate to event details or handle event interaction
+    console.log('Event pressed:', event.title);
+  };
+
   // Render each message in the chat
-  const renderMessage = ({ item }: { item: any }) => (
-    <View style={[
-      styles.messageContainer,
-      item.role === 'user' ? styles.userMessage : styles.assistantMessage
-    ]}>
-      <ThemedText style={[
-        styles.messageText,
-        item.role === 'user' ? styles.userMessageText : styles.assistantMessageText
+  const renderMessage = ({ item }: { item: any }) => {
+    console.log('=== RENDER MESSAGE START ===');
+    console.log('Message ID:', item.id);
+    console.log('Message role:', item.role);
+    console.log('Message type:', item.type);
+    console.log('Message content:', item.content);
+    console.log('Has events:', !!item.events);
+    console.log('Events length:', item.events?.length || 0);
+    console.log('Events data:', item.events ? item.events.map((e: any) => ({ id: e.id, title: e.title })) : null);
+    console.log('Condition check - item.type === "event_cards":', item.type === 'event_cards');
+    console.log('Condition check - item.events && item.events.length > 0:', item.events && item.events.length > 0);
+    console.log('Full condition result:', item.type === 'event_cards' && item.events && item.events.length > 0);
+
+    return (
+      <View style={[
+        styles.messageContainer,
+        item.role === 'user' ? styles.userMessage : styles.assistantMessage
       ]}>
-        {item.content}
-      </ThemedText>
-    </View>
-  );
+        <ThemedText style={[
+          styles.messageText,
+          item.role === 'user' ? styles.userMessageText : styles.assistantMessageText
+        ]}>
+          {item.content}
+        </ThemedText>
+
+        {/* Render event cards for messages with type 'event_cards' and events */}
+        {(() => {
+          const shouldRenderEvents = item.type === 'event_cards' && item.events && item.events.length > 0;
+          console.log('=== EVENT RENDERING CONDITION ===');
+          console.log('shouldRenderEvents:', shouldRenderEvents);
+
+          if (shouldRenderEvents) {
+            console.log('RENDERING EVENT CARDS');
+            console.log('Number of events to render:', item.events.length);
+            return (
+              <View style={styles.eventsContainer}>
+                {item.events.map((event: Event, index: number) => {
+                  console.log(`Rendering event ${index + 1}:`, event.title);
+                  console.log('Event data:', JSON.stringify(event, null, 2));
+
+                  // Validate event data before rendering
+                  if (!event || !event.id || !event.title) {
+                    console.warn('Invalid event data:', event);
+                    return null;
+                  }
+
+                  console.log('Event validation passed, creating EventCard component');
+                  return (
+                    <EventCard
+                      key={event.id}
+                      event={event}
+                      onPress={() => handleEventPress(event)}
+                      compact={true}
+                    />
+                  );
+                }).filter(Boolean)}
+              </View>
+            );
+          } else {
+            console.log('NOT RENDERING EVENT CARDS - condition not met');
+            return null;
+          }
+        })()}
+      </View>
+    );
+  };
 
   return (
     <KeyboardAvoidingView
@@ -100,6 +161,10 @@ const styles = StyleSheet.create({
   },
   assistantMessageText: {
     color: '#000000',
+  },
+  eventsContainer: {
+    marginTop: 12,
+    gap: 12,
   },
   inputContainer: {
     flexDirection: 'row',

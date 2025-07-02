@@ -44,6 +44,16 @@ export async function POST(req: Request) {
         console.error("❌ Error saving user message:", error);
     }
 
+    // Track events from tool calls
+    let eventsFromTools: any[] = [];
+
+    console.log('=== STREAMTEXT CONFIGURATION ===');
+    console.log('Model:', 'gpt-4o-mini');
+    console.log('Max steps:', 3);
+    console.log('Messages count:', messages.length);
+    console.log('Last user message:', messages[messages.length - 1]?.content);
+    console.log('Available tools: extractInterests, getRecommendations');
+
     const result = streamText({
         model: openai("gpt-4o-mini"),
         maxSteps: 3,
@@ -56,10 +66,13 @@ IMPORTANT GUIDELINES:
 - Be conversational, warm, and engaging in your responses
 - When users share their interests, hobbies, or activities, use the extractInterests tool to learn about them
 - When users ask for recommendations, suggestions, or events, use the getRecommendations tool
+- NEVER make up or invent events - only use the events returned by the getRecommendations tool
+- The getRecommendations tool will return real events from the database - use those exact events
+- If the tool returns events, mention them naturally in your response
+- If no events are found, be honest about it
 - Ask follow-up questions to understand their preferences better
 - Keep responses natural and conversational - don't sound like a robot
 - Always acknowledge when you learn new interests about them
-- Dont offer specific information outside of tool calls
 
 Your goal is to help users discover events that match their interests by having natural conversations and understanding what they enjoy.`
             },
@@ -137,33 +150,74 @@ Focus on activities, hobbies, skills, and preferences that could relate to event
                     userMessage: z.string().describe('The user message requesting recommendations'),
                 }),
                 execute: async ({ userMessage }) => {
-                    console.log("🎪 AI calling getRecommendations tool...");
+                    console.log("=== TOOL EXECUTION START ===");
+                    console.log("Tool input userMessage:", userMessage);
+
                     try {
                         const result = await getEventRecommendations(session.user.id, 3);
-                        console.log("✅ Recommendations retrieved via tool");
-                        return result;
+                        console.log("Tool result object:", JSON.stringify(result, null, 2));
+                        console.log("Tool result.success:", result.success);
+                        console.log("Tool result.events.length:", result.events?.length || 0);
+                        console.log("Tool result.message:", result.message);
+
+                        // Store events for later use in the response
+                        if (result.success && result.events.length > 0) {
+                            eventsFromTools = result.events;
+                            console.log("eventsFromTools set to:", eventsFromTools.length, "events");
+                            console.log("eventsFromTools sample:", eventsFromTools.slice(0, 1).map(e => ({ id: e.id, title: e.title })));
+                        } else {
+                            console.log("No events to store in eventsFromTools");
+                        }
+
+                        console.log("=== TOOL RETURNING ===");
+                        console.log("Returning message:", result.message);
+                        return result.message;
                     } catch (error) {
-                        console.error("❌ Recommendation tool failed:", error);
+                        console.error("Tool execution error:", error);
                         return "I'm having trouble finding events right now, but I'm working on it!";
                     }
                 }
             })
         },
         onFinish: async (completion) => {
-            // Save the AI's response to the database
+            console.log("=== ONFINISH START ===");
+            console.log("completion.text:", completion.text);
+            console.log("eventsFromTools.length:", eventsFromTools.length);
+            console.log("eventsFromTools:", eventsFromTools.map(e => ({ id: e.id, title: e.title })));
+
             if (!db) {
-                console.error("❌ Database not available for AI message save");
+                console.error("Database not available for AI message save");
                 return;
             }
+
             try {
+                let messageContent: string;
+
+                if (eventsFromTools.length > 0) {
+                    const structuredResponse = {
+                        type: "event_cards",
+                        events: eventsFromTools,
+                        message: completion.text
+                    };
+                    messageContent = JSON.stringify(structuredResponse);
+                    console.log("Structured response object:", JSON.stringify(structuredResponse, null, 2));
+                    console.log("Saving structured response with events");
+                } else {
+                    messageContent = completion.text;
+                    console.log("Saving plain text response");
+                }
+
+                console.log("Final messageContent to save:", messageContent);
+                console.log("messageContent length:", messageContent.length);
+
                 await db.insert(message).values({
                     userId: session.user.id,
-                    content: completion.text,
+                    content: messageContent,
                     role: "assistant"
                 });
-                console.log("💾 AI response saved");
+                console.log("=== ONFINISH COMPLETE ===");
             } catch (error) {
-                console.error("❌ Error saving AI message:", error);
+                console.error("Error saving AI message:", error);
             }
         },
     });
