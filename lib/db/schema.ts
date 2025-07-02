@@ -101,10 +101,17 @@ export const userProfile = pgTable("user_profile", {
     preferences: jsonb("preferences").notNull(), // { distance_radius_km: number, preferred_categories: string[] }
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-    // Chat analysis fields
-    interestsJson: jsonb("interests_json").default({}),
-    interestScores: jsonb("interest_scores").default({}),
-    lastInterestUpdate: timestamp("last_interest_update", { withTimezone: true }).defaultNow(),
+});
+
+// User interests table for chat analysis
+export const userInterest = pgTable("user_interests", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: 'cascade' }),
+    keyword: text("keyword").notNull(),
+    confidence: text("confidence").notNull(), // decimal(3,2) in DB, stored as text in Drizzle
+    specificity: text("specificity").notNull(), // decimal(3,2) in DB, stored as text in Drizzle
+    lastUpdated: timestamp("last_updated", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
 // Event interaction status enum
@@ -150,6 +157,7 @@ export const schema = {
     message,
     event,
     userProfile,
+    userInterest,
     eventInteraction,
     eventRecommendation
 }

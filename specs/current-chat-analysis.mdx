@@ -1,0 +1,231 @@
+# Current Chat Analysis System - Technical Specification
+
+## Overview
+
+The chat analysis system is a conversational AI that builds rich interest profiles through natural conversation and provides personalized event recommendations. The system uses OpenAI's GPT-4o-mini model to extract user interests from chat messages and matches them against a curated database of local events.
+
+## Architecture
+
+### Core Components
+
+1. **Interest Extraction Service** (`lib/services/interest-extraction.ts`)
+   - Analyzes user messages to extract interests and preferences
+   - Uses AI to identify keywords with confidence and specificity scores
+   - Merges similar interests and maintains interest profiles
+
+2. **Event Matching Service** (`lib/services/event-matching.ts`)
+   - Calculates semantic similarity between user interests and event keywords
+   - Provides personalized event recommendations
+   - Tracks recommendation history to avoid repetition
+
+3. **Chat API** (`app/api/chat/[...all]+api.ts`)
+   - Handles real-time chat interactions
+   - Orchestrates interest extraction and event matching
+   - Manages conversation flow and response generation
+
+4. **Database Schema** (`lib/db/schema.ts`)
+   - Stores user profiles, interests, events, and message history
+   - Tracks event recommendations and user interactions
+
+## Data Flow
+
+### 1. Message Processing Pipeline
+
+```
+User Message → Save to DB → Extract Interests → Update Profile → Match Events → Generate Response
+```
+
+**Step 1: Message Storage**
+- User messages are immediately saved to the database with role "user"
+- Provides conversation history for context
+
+**Step 2: Interest Extraction**
+- Analyzes the current message + last 5 messages for context
+- Uses AI prompt to extract interests with:
+  - **Keyword**: Single word or short phrase
+  - **Confidence**: 0-1 score indicating certainty
+  - **Specificity**: 0-1 score indicating how specific vs. broad the interest is
+
+**Step 3: Profile Update**
+- Merges new interests with existing ones using similarity detection
+- Boosts confidence when similar interests are found
+- Updates user profile in database
+
+**Step 4: Event Matching**
+- Triggers when sufficient information is available (5+ interests, 1+ high specificity)
+- Calculates weighted similarity scores between interests and event keywords
+- Returns top 3 matching events
+
+**Step 5: Response Generation**
+- AI generates conversational response with event recommendations
+- Saves assistant response to database
+- Records event recommendations for tracking
+
+### 2. Interest Extraction Process
+
+The system uses a sophisticated AI prompt to extract interests:
+
+```typescript
+const prompt = `
+You are a helpful assistant analyzing user conversations to understand their interests and preferences for events.
+
+Extract interests from this message and conversation context. For each interest, provide:
+1. A keyword (single word or short phrase)
+2. Confidence score (0-1, how sure you are about this interest)
+3. Specificity score (0-1, how specific this interest is)
+
+Specificity scoring examples:
+- "fitness" = 0.1 (very broad)
+- "running" = 0.4 (moderate)
+- "morning running" = 0.7 (specific)
+- "Central Park" = 0.8 (location-specific)
+- "morning running in Central Park" = 0.9 (highly specific)
+`;
+```
+
+**Interest Categories Considered:**
+- Fitness, social, creative, technology, education, food, music, outdoors, business
+- Activity levels: beginner, intermediate, advanced
+- Skill requirements: none, some experience, expert level
+- Social preferences: group activities, solo activities, networking
+
+### 3. Interest Merging Logic
+
+When new interests are extracted, the system merges them with existing interests:
+
+```typescript
+mergeSimilarKeywords(newInterests: UserInterestNew[], existingInterests: UserInterestNew[]): UserInterestNew[]
+```
+
+**Merging Rules:**
+- Exact keyword matches are merged with confidence boost
+- Similar keywords (synonyms, contained words) are merged
+- New unique interests are added to the profile
+- Confidence boost: `existing + (new * 0.33)`
+
+**Similarity Detection:**
+- Exact match (case-insensitive)
+- One keyword contains the other
+- Synonym matching for common terms
+
+### 4. Event Matching Algorithm
+
+The system uses a weighted scoring approach:
+
+```typescript
+async calculateSimilarity(userInterests: UserInterestNew[], eventKeywords: string[]): Promise<number>
+```
+
+**Scoring Components:**
+1. **Semantic Similarity**: AI-powered keyword matching (0-1)
+2. **Confidence Weighting**: Higher confidence interests get more weight
+3. **Specificity Weighting**: More specific interests are weighted higher
+4. **Popularity Boost**: Events with more attendees get small boost
+
+**Final Score Formula:**
+```
+totalScore = similarityScore + popularityScore
+where popularityScore = min((attendees + interested) / 10, 0.3)
+```
+
+## Configuration Constants
+
+Key thresholds and settings (`constants/chat-analysis.ts`):
+
+```typescript
+export const CHAT_ANALYSIS_CONFIG = {
+    MIN_CONFIDENCE_THRESHOLD: 0.3,        // Minimum confidence for valid interests
+    HIGH_SPECIFICITY_THRESHOLD: 0.7,      // Threshold for "specific" interests
+    HIGH_CONFIDENCE_THRESHOLD: 0.8,       // Threshold for high-confidence interests
+    MIN_KEYWORDS_FOR_RECOMMENDATIONS: 5,  // Minimum interests needed
+    MIN_HIGH_SPECIFICITY_KEYWORDS: 1,     // Minimum specific interests needed
+    MERGE_CONFIDENCE_BOOST: 0.33,         // Confidence boost when merging
+    STRONG_UPDATE_SPECIFICITY_THRESHOLD: 0.7,
+    STRONG_UPDATE_CONFIDENCE_THRESHOLD: 0.8,
+};
+```
+
+## Recommendation Triggers
+
+The system provides recommendations when:
+
+1. **Sufficient Information**: 5+ interests with 1+ high specificity
+2. **Explicit Request**: User asks for recommendations/suggestions
+3. **High Confidence**: New high-confidence, high-specificity interests detected
+
+## Data Models
+
+### User Interest Format
+```typescript
+interface UserInterestNew {
+    keyword: string;           // Interest keyword
+    confidence: number;        // 0-1 confidence score
+    specificity: number;       // 0-1 specificity score
+    lastUpdated: Date;         // Last update timestamp
+}
+```
+
+### Interest Extraction Result
+```typescript
+interface InterestExtractionResultNew {
+    newInterests: UserInterestNew[];
+    confidence: number;        // Overall extraction confidence
+    shouldUpdate: boolean;     // Whether to update user profile
+}
+```
+
+### Event Recommendation Result
+```typescript
+interface EventRecommendationResult {
+    id: string;
+    title: string;
+    description: string;
+    categories: string[];
+    attendeesCount: number;
+    interestedCount: number;
+    location: { neighborhood?: string };
+    similarityScore: number;
+}
+```
+
+## Error Handling
+
+The system includes robust error handling:
+
+1. **JSON Parsing**: Multiple fallback strategies for AI response parsing
+2. **Database Failures**: Graceful degradation when DB is unavailable
+3. **AI Service Errors**: Fallback to empty results with logging
+4. **Invalid Responses**: Validation and filtering of AI outputs
+
+## Performance Considerations
+
+1. **Context Limiting**: Only analyzes last 5-6 messages for context
+2. **Token Limits**: 500 max tokens for interest extraction
+3. **Caching**: Singleton service instances for efficiency
+4. **Async Processing**: Non-blocking event matching and profile updates
+
+## Monitoring and Logging
+
+The system includes comprehensive logging:
+
+- Interest extraction results with confidence/specificity scores
+- Event matching scores and recommendations
+- Profile update operations
+- Error conditions and fallbacks
+- User acknowledgment messages
+
+## Current Limitations
+
+1. **AI Hallucination**: System prompt attempts to prevent inventing events
+2. **Interest Stability**: Interests can change frequently based on conversation
+3. **Context Window**: Limited to last 5-6 messages for analysis
+4. **Keyword Matching**: Basic synonym detection, could be more sophisticated
+5. **Location Awareness**: Limited location-based filtering
+
+## Future Improvements
+
+1. **Interest Persistence**: Better handling of interest stability over time
+2. **Advanced Matching**: More sophisticated semantic similarity algorithms
+3. **Context Expansion**: Larger conversation context windows
+4. **Location Intelligence**: Better location-based event filtering
+5. **User Feedback**: Learning from user interactions with recommendations

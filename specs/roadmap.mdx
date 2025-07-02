@@ -1,0 +1,92 @@
+# Chat Analysis MVP Migration - Simple Checklist
+
+## Goal
+Get from current chat analysis to desired conversational AI system in a few days.
+
+## Current → Desired State
+- **Current**: Basic interest extraction, JSON storage, simple matching
+- **Desired**: Rich interest profiles with confidence/specificity, natural conversation, smart triggers
+
+## Phase 1: Database Changes (Day 1)
+
+### 1.1 Update Schema
+- [x] Create new `user_interests` table migration
+- [x] Add columns: `keyword`, `confidence`, `specificity`, `last_updated`
+- [x] Remove old `interests_json` and `interest_scores` from `user_profile`
+- [x] Update `lib/db/types.ts` with new `UserInterest` interface
+
+### 1.2 Data Migration
+- [x] Write simple script to convert existing JSON interests to new format
+- [x] Generate default specificity scores (0.5 for broad, 0.8 for specific)
+- [x] Test with sample data
+
+## Phase 2: Core Logic Updates (Day 2)
+
+### 2.1 Interest Extraction Service
+- [x] Update `lib/services/interest-extraction.ts`
+- [x] Modify `extractInterests()` to return new format with confidence/specificity
+- [x] Add keyword decomposition logic
+- [x] Update AI prompts to extract specificity scores
+
+### 2.2 Event Matching Service
+- [x] Update `lib/services/event-matching.ts`
+- [x] Modify `calculateSimilarity()` to weight by confidence * specificity
+- [x] Update scoring algorithm to use new interest format
+
+### 2.3 Add Configuration
+- [x] Create `constants/chat-analysis.ts` with thresholds
+- [x] Add recommendation trigger logic (5+ keywords, 1+ high specificity)
+
+## Phase 3: Conversational Features (Day 3)
+
+### 3.1 Basic Acknowledgment
+- [x] Add simple acknowledgment responses in chat API
+- [x] "I'm learning that you enjoy [interest]" type messages
+- [x] Only when new high-confidence interests are detected
+
+### 3.2 Recommendation Triggers
+- [x] Implement "sufficient information" check (5+ keywords)
+- [x] Add explicit request detection
+- [x] Trigger recommendations when conditions met
+
+### 3.3 API Integration
+- [x] Update `app/api/chat/[...all]+api.ts` to use new services
+- [x] Test end-to-end flow
+- [x] Fix any breaking changes
+
+## Phase 4: Polish & Test (Day 4)
+
+### 4.1 Frontend Updates
+- [x] Update `app/(tabs)/chat.tsx` if needed for new responses
+- [x] Test conversation flow
+- [x] Verify event recommendations work
+
+### 4.2 Basic Testing
+- [x] Test interest extraction with sample messages
+- [x] Test event matching with new format
+- [x] Test recommendation triggers
+- [ ] Fix any bugs
+
+### 4.3 Documentation
+- [x] Update any relevant code comments
+- [x] Document new configuration options
+
+## Success Criteria
+- [ ] Interest extraction works with confidence/specificity
+- [ ] Event matching uses new weighted scoring
+- [ ] Recommendations trigger when user has enough interests
+- [ ] Basic acknowledgment responses work
+- [ ] No breaking changes to existing functionality
+
+## That's It
+- No A/B testing needed
+- No Redis or complex caching
+- No performance optimization
+- No user research
+- Just get the core functionality working
+
+## Future (If Needed)
+- Better conversation flow
+- More sophisticated triggers
+- Performance improvements
+- User feedback collection

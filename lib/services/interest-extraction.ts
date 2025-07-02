@@ -1,6 +1,7 @@
 import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
-import { InterestExtractionResult, UserInterests } from "../db/types";
+import { CHAT_ANALYSIS_CONFIG } from "../../constants/chat-analysis";
+import { InterestExtractionResultNew, UserInterestNew } from "../db/types";
 
 export class InterestExtractionService {
     private static instance: InterestExtractionService;
@@ -20,8 +21,8 @@ export class InterestExtractionService {
     async extractInterests(
         userMessage: string,
         recentMessages: Array<{ role: string; content: string }>,
-        existingInterests?: UserInterests
-    ): Promise<InterestExtractionResult> {
+        existingInterests?: UserInterestNew[]
+    ): Promise<InterestExtractionResultNew> {
         try {
             const context = recentMessages
                 .slice(-5) // Last 5 messages for context
@@ -31,12 +32,29 @@ export class InterestExtractionService {
             const prompt = `
 You are a helpful assistant analyzing user conversations to understand their interests and preferences for events.
 
-Extract interests from this message and conversation context. 
+Extract interests from this message and conversation context. For each interest, provide:
+1. A keyword (single word or short phrase)
+2. Confidence score (0-1, how sure you are about this interest)
+3. Specificity score (0-1, how specific this interest is)
+
+Specificity scoring examples:
+- "fitness" = 0.1 (very broad)
+- "running" = 0.4 (moderate)
+- "morning running" = 0.7 (specific)
+- "Central Park" = 0.8 (location-specific)
+- "morning running in Central Park" = 0.9 (highly specific)
 
 IMPORTANT: Return ONLY valid JSON without any markdown formatting, code blocks, or extra text.
 
 Expected format:
-{"newInterests": {"broad": [], "specific": []}, "confidence": 0.8, "shouldUpdate": true}
+{
+  "newInterests": [
+    {"keyword": "running", "confidence": 0.8, "specificity": 0.4},
+    {"keyword": "morning exercise", "confidence": 0.7, "specificity": 0.7}
+  ],
+  "confidence": 0.8,
+  "shouldUpdate": true
+}
 
 Consider:
 - Categories: fitness, social, creative, technology, education, food, music, outdoors, business
@@ -58,9 +76,9 @@ Return only the JSON object:`;
             });
 
             // Try to parse JSON, with fallback for markdown formatting
-            let parsed: InterestExtractionResult;
+            let parsed: InterestExtractionResultNew;
             try {
-                parsed = JSON.parse(result.text) as InterestExtractionResult;
+                parsed = JSON.parse(result.text) as InterestExtractionResultNew;
             } catch (parseError) {
                 console.log("Initial JSON parse failed, attempting markdown extraction");
 
@@ -68,7 +86,7 @@ Return only the JSON object:`;
                 const jsonMatch = result.text.match(/```(?:json)?\s*(\{.*?\})\s*```/s);
                 if (jsonMatch) {
                     try {
-                        parsed = JSON.parse(jsonMatch[1]) as InterestExtractionResult;
+                        parsed = JSON.parse(jsonMatch[1]) as InterestExtractionResultNew;
                     } catch (secondError) {
                         console.error("Failed to parse JSON from markdown:", secondError);
                         throw new Error("Invalid interest extraction response format");
@@ -78,7 +96,7 @@ Return only the JSON object:`;
                     const jsonObjectMatch = result.text.match(/\{.*\}/s);
                     if (jsonObjectMatch) {
                         try {
-                            parsed = JSON.parse(jsonObjectMatch[0]) as InterestExtractionResult;
+                            parsed = JSON.parse(jsonObjectMatch[0]) as InterestExtractionResultNew;
                         } catch (thirdError) {
                             console.error("Failed to parse JSON object from text:", thirdError);
                             throw new Error("Invalid interest extraction response format");
@@ -90,22 +108,24 @@ Return only the JSON object:`;
             }
 
             // Validate the response
-            if (!parsed.newInterests || !parsed.newInterests.broad || !parsed.newInterests.specific) {
+            if (!parsed.newInterests || !Array.isArray(parsed.newInterests)) {
                 throw new Error("Invalid interest extraction response");
             }
 
+            // Filter interests that meet minimum confidence threshold
+            const filteredInterests = parsed.newInterests.filter(
+                interest => interest.confidence >= CHAT_ANALYSIS_CONFIG.MIN_CONFIDENCE_THRESHOLD
+            );
+
             return {
-                newInterests: {
-                    broad: parsed.newInterests.broad || [],
-                    specific: parsed.newInterests.specific || []
-                },
+                newInterests: filteredInterests,
                 confidence: Math.max(0, Math.min(1, parsed.confidence || 0.5)),
                 shouldUpdate: parsed.shouldUpdate || false
             };
         } catch (error) {
             console.error("Error extracting interests:", error);
             return {
-                newInterests: { broad: [], specific: [] },
+                newInterests: [],
                 confidence: 0,
                 shouldUpdate: false
             };
@@ -113,42 +133,93 @@ Return only the JSON object:`;
     }
 
     /**
-     * Update existing user interests with new information
+     * Decompose compound interests into individual keywords
      */
-    updateUserInterests(
-        existing: UserInterests,
-        newInterests: InterestExtractionResult
-    ): UserInterests {
-        if (!newInterests.shouldUpdate || newInterests.confidence < 0.3) {
-            return existing;
-        }
+    decomposeKeywords(compoundInterest: string): string[] {
+        const keywords: string[] = [];
 
-        const updated: UserInterests = {
-            broad: [...new Set([...existing.broad, ...newInterests.newInterests.broad])],
-            specific: [...new Set([...existing.specific, ...newInterests.newInterests.specific])],
-            scores: { ...existing.scores },
-            lastUpdated: new Date()
-        };
+        // Add the compound interest itself
+        keywords.push(compoundInterest);
 
-        // Update confidence scores
-        newInterests.newInterests.broad.forEach(interest => {
-            const currentScore = existing.scores[interest] || 0;
-            updated.scores[interest] = Math.max(currentScore, newInterests.confidence);
+        // Split by common prepositions and conjunctions
+        const parts = compoundInterest.split(/\s+(?:in|at|on|with|and|or|for|to|of|the)\s+/i);
+
+        // Add individual parts if they're meaningful
+        parts.forEach(part => {
+            const trimmed = part.trim();
+            if (trimmed.length > 2 && trimmed !== compoundInterest) {
+                keywords.push(trimmed);
+            }
         });
 
-        newInterests.newInterests.specific.forEach(interest => {
-            const currentScore = existing.scores[interest] || 0;
-            updated.scores[interest] = Math.max(currentScore, newInterests.confidence);
-        });
-
-        return updated;
+        return [...new Set(keywords)]; // Remove duplicates
     }
 
     /**
-     * Check if interests need updating (older than 24 hours)
+     * Merge similar keywords with confidence boost
      */
-    shouldUpdateInterests(interests: UserInterests): boolean {
-        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        return interests.lastUpdated < twentyFourHoursAgo;
+    mergeSimilarKeywords(newInterests: UserInterestNew[], existingInterests: UserInterestNew[]): UserInterestNew[] {
+        // Start with all existing interests
+        const result: UserInterestNew[] = [...existingInterests];
+
+        for (const newInterest of newInterests) {
+            let wasMerged = false;
+
+            // Check for similar existing interests
+            for (let i = 0; i < result.length; i++) {
+                const existingInterest = result[i];
+                if (this.isSimilarKeyword(newInterest.keyword, existingInterest.keyword)) {
+                    // Merge and boost confidence
+                    const boostedConfidence = Math.min(1,
+                        existingInterest.confidence + (newInterest.confidence * CHAT_ANALYSIS_CONFIG.MERGE_CONFIDENCE_BOOST)
+                    );
+
+                    result[i] = {
+                        keyword: existingInterest.keyword,
+                        confidence: boostedConfidence,
+                        specificity: Math.max(existingInterest.specificity, newInterest.specificity),
+                        lastUpdated: new Date()
+                    };
+                    wasMerged = true;
+                    break;
+                }
+            }
+
+            if (!wasMerged) {
+                result.push(newInterest);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Check if two keywords are similar
+     */
+    private isSimilarKeyword(keyword1: string, keyword2: string): boolean {
+        const k1 = keyword1.toLowerCase();
+        const k2 = keyword2.toLowerCase();
+
+        // Exact match
+        if (k1 === k2) return true;
+
+        // One contains the other
+        if (k1.includes(k2) || k2.includes(k1)) return true;
+
+        // Check for common synonyms (basic implementation)
+        const synonyms: Record<string, string[]> = {
+            'fitness': ['exercise', 'workout', 'gym'],
+            'running': ['jogging', 'cardio'],
+            'music': ['concerts', 'live music'],
+            'food': ['dining', 'restaurants', 'cuisine']
+        };
+
+        for (const [word, syns] of Object.entries(synonyms)) {
+            if ((k1 === word && syns.includes(k2)) || (k2 === word && syns.includes(k1))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 } 

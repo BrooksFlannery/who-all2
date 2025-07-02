@@ -1,6 +1,6 @@
 // TypeScript types for our database schema
 import { InferInsertModel, InferSelectModel } from 'drizzle-orm';
-import { event, eventInteraction, user, userProfile } from './schema';
+import { event, eventInteraction, user, userInterest, userProfile } from './schema';
 
 // Base types from our schema
 export type Event = {
@@ -20,6 +20,8 @@ export type Event = {
 export type EventInsert = InferInsertModel<typeof event>;
 export type UserProfile = InferSelectModel<typeof userProfile>;
 export type UserProfileInsert = InferInsertModel<typeof userProfile>;
+export type UserInterest = InferSelectModel<typeof userInterest>;
+export type UserInterestInsert = InferInsertModel<typeof userInterest>;
 export type EventInteraction = InferSelectModel<typeof eventInteraction>;
 export type EventInteractionInsert = InferInsertModel<typeof eventInteraction>;
 export type User = InferSelectModel<typeof user>;
@@ -104,4 +106,19 @@ export interface ChatResponseWithEvents {
     text: string;
     events?: EventRecommendationResult[];
     needsClarification?: boolean;
+}
+
+// New UserInterest interface for the desired system
+export interface UserInterestNew {
+    keyword: string;
+    confidence: number;        // 0-1, how sure we are about this interest
+    specificity: number;       // 0-1, how specific this interest is
+    lastUpdated: Date;
+}
+
+// Interest Extraction Result for new system
+export interface InterestExtractionResultNew {
+    newInterests: UserInterestNew[];
+    confidence: number;
+    shouldUpdate: boolean;
 } 

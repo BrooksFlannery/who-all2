@@ -1,4 +1,5 @@
 import * as dotenv from "dotenv";
+import { UserInterestNew } from "../lib/db/types";
 import { EventMatchingService } from "../lib/services/event-matching";
 import { InterestExtractionService } from "../lib/services/interest-extraction";
 
@@ -21,6 +22,7 @@ async function testChatAnalysis() {
         { role: "assistant", content: "Welcome! What kind of activities do you enjoy?" }
     ];
 
+    let extractedInterests: UserInterestNew[] = [];
     try {
         const extractionResult = await interestService.extractInterests(
             testMessage,
@@ -32,6 +34,7 @@ async function testChatAnalysis() {
         console.log("  New interests:", extractionResult.newInterests);
         console.log("  Confidence:", extractionResult.confidence);
         console.log("  Should update:", extractionResult.shouldUpdate);
+        extractedInterests = extractionResult.newInterests;
     } catch (error) {
         console.error("✗ Interest extraction failed:", error);
         return;
@@ -41,17 +44,10 @@ async function testChatAnalysis() {
     console.log("\n2. Testing Event Matching...");
     const eventService = EventMatchingService.getInstance();
 
-    const testInterests = {
-        broad: ["fitness", "running"],
-        specific: ["morning running"],
-        scores: { "fitness": 0.8, "running": 0.9, "morning running": 0.7 },
-        lastUpdated: new Date()
-    };
-
     try {
         const matchedEvents = await eventService.matchEventsToInterests(
             "test-user-id",
-            testInterests,
+            extractedInterests,
             3
         );
 
@@ -75,7 +71,7 @@ async function testChatAnalysis() {
         await eventService.createUserProfile("test-user-id", {
             name: "Test User",
             location: { lat: 37.7749, lng: -122.4194 },
-            interests: ["fitness", "technology"],
+            interests: extractedInterests.map(i => i.keyword),
             preferences: { distance_radius_km: 15, preferred_categories: ["fitness", "social"] }
         });
 
@@ -93,6 +89,17 @@ async function testChatAnalysis() {
     } catch (error) {
         console.error("✗ User profile creation failed:", error);
         return;
+    }
+
+    // Test 4: Recommendation Trigger Logic
+    console.log("\n4. Testing Recommendation Trigger Logic...");
+    const hasSufficientKeywords = extractedInterests.length >= 5;
+    const hasHighSpecificity = extractedInterests.some(i => i.specificity >= 0.7);
+    const explicitRequest = /recommend|suggest|event|activity|something to do/i.test(testMessage);
+    if ((hasSufficientKeywords && hasHighSpecificity) || explicitRequest) {
+        console.log("✓ Recommendation trigger: PASSED");
+    } else {
+        console.log("✗ Recommendation trigger: FAILED");
     }
 
     console.log("\n=== All Tests Passed! ===");

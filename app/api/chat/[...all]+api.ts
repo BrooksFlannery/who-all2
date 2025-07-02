@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { message } from "@/lib/db/schema";
+import { UserInterestNew } from "@/lib/db/types";
 import { EventMatchingService } from "@/lib/services/event-matching";
 import { InterestExtractionService } from "@/lib/services/interest-extraction";
 import { openai } from "@ai-sdk/openai";
@@ -11,19 +12,8 @@ import { eq } from "drizzle-orm";
 export const maxDuration = 30;
 
 export async function POST(req: Request) {
-    console.log("=== POST /api/chat - Request received ===");
-    console.log("Request URL:", req.url);
-    console.log("Request method:", req.method);
-    console.log("Request origin:", req.headers.get('origin'));
-    console.log("Request user-agent:", req.headers.get('user-agent'));
-    console.log("All request headers:", Object.fromEntries(req.headers.entries()));
-
     // Get the current user session
-    console.log("Attempting to get session...");
     const session = await auth.api.getSession({ headers: req.headers });
-    console.log("Session result:", session);
-    console.log("Session user ID:", session?.user?.id);
-    console.log("Session authenticated:", session?.user?.id ? "YES" : "NO");
 
     if (!session?.user?.id) {
         return new Response("Unauthorized", { status: 401 });
@@ -35,7 +25,6 @@ export async function POST(req: Request) {
     }
 
     const { messages } = await req.json();
-    console.log("Messages received:", messages.length);
 
     // Save the user's message to the database
     try {
@@ -44,7 +33,6 @@ export async function POST(req: Request) {
             content: messages[messages.length - 1].content,
             role: "user"
         });
-        console.log("User message saved to database");
     } catch (error) {
         console.error("Error saving user message:", error);
     }
@@ -54,8 +42,9 @@ export async function POST(req: Request) {
     const eventService = EventMatchingService.getInstance();
 
     // Extract user interests from conversation
-    let userInterests = null;
+    let userInterests: UserInterestNew[] = [];
     let shouldUpdateInterests = false;
+    let newHighConfidenceInterests: UserInterestNew[] = [];
 
     try {
         const userProfile = await eventService.getUserProfile(session.user.id);
@@ -64,21 +53,13 @@ export async function POST(req: Request) {
             shouldUpdateInterests = userProfile.needsUpdate;
         } else {
             // Create default profile for existing user
-            console.log("Creating default user profile for:", session.user.id);
             await eventService.createUserProfile(session.user.id, {
                 name: session.user.name || "User",
                 location: { lat: 0, lng: 0 }, // Default location
                 interests: [],
                 preferences: { distance_radius_km: 10, preferred_categories: [] }
             });
-
-            // Initialize empty interests
-            userInterests = {
-                broad: [],
-                specific: [],
-                scores: {},
-                lastUpdated: new Date()
-            };
+            userInterests = [];
             shouldUpdateInterests = true;
         }
 
@@ -87,71 +68,92 @@ export async function POST(req: Request) {
         const extractionResult = await interestService.extractInterests(
             messages[messages.length - 1].content,
             recentMessages,
-            userInterests || undefined
+            userInterests.length > 0 ? userInterests : undefined
+        );
+
+        // Find new high-confidence interests
+        newHighConfidenceInterests = extractionResult.newInterests.filter(
+            i => i.confidence >= 0.8 && i.specificity >= 0.7 && !userInterests.some(u => u.keyword === i.keyword)
         );
 
         if (extractionResult.shouldUpdate && extractionResult.confidence > 0.3) {
-            if (userInterests) {
-                userInterests = interestService.updateUserInterests(userInterests, extractionResult);
-            } else {
-                userInterests = {
-                    broad: extractionResult.newInterests.broad,
-                    specific: extractionResult.newInterests.specific,
-                    scores: {},
-                    lastUpdated: new Date()
-                };
-                // Initialize scores
-                extractionResult.newInterests.broad.forEach(interest => {
-                    userInterests!.scores[interest] = extractionResult.confidence;
-                });
-                extractionResult.newInterests.specific.forEach(interest => {
-                    userInterests!.scores[interest] = extractionResult.confidence;
-                });
-            }
-
+            // Merge new interests
+            userInterests = interestService.mergeSimilarKeywords(extractionResult.newInterests, userInterests);
             // Update user profile with new interests
             await eventService.updateUserProfile(session.user.id, userInterests);
-            console.log("User interests updated");
+
+            // Log what we learned
+            if (extractionResult.newInterests.length > 0) {
+                console.log("🤖 Learning new interests:",
+                    extractionResult.newInterests.map(i =>
+                        `"${i.keyword}" (confidence: ${i.confidence}, specificity: ${i.specificity})`
+                    ).join(", ")
+                );
+            }
         }
     } catch (error) {
         console.error("Error processing user interests:", error);
     }
 
-    // Match events to user interests
+    // Recommendation trigger logic
+    const hasSufficientKeywords = userInterests.length >= 5;
+    const hasHighSpecificity = userInterests.some(i => i.specificity >= 0.7);
+    const isExplicitRequest = /recommend|suggest|event|activity|something to do/i.test(messages[messages.length - 1].content);
+
     let matchedEvents: any[] = [];
-    if (userInterests && (userInterests.broad.length > 0 || userInterests.specific.length > 0)) {
+    if ((hasSufficientKeywords && hasHighSpecificity) || isExplicitRequest) {
         try {
             matchedEvents = await eventService.matchEventsToInterests(session.user.id, userInterests, 3);
-            console.log(`Found ${matchedEvents.length} matching events`);
+
+            if (matchedEvents.length > 0) {
+                console.log("🎯 Found matching events:",
+                    matchedEvents.map(e => `"${e.title}" (score: ${e.similarityScore.toFixed(2)})`).join(", ")
+                );
+            }
         } catch (error) {
             console.error("Error matching events:", error);
         }
+    } else {
+        console.log("⏳ Not enough information for recommendations yet. Need 5+ interests with 1+ high specificity, or explicit request.");
+        console.log("�� Current profile:",
+            `${userInterests.length} interests, ${userInterests.filter(i => i.specificity >= 0.7).length} high specificity`
+        );
+        if (userInterests.length > 0) {
+            console.log("🎯 User interests:",
+                userInterests.map(i =>
+                    `"${i.keyword}" (conf: ${i.confidence}, spec: ${i.specificity})`
+                ).join(", ")
+            );
+        }
+    }
+
+    // Build acknowledgment message if new high-confidence interests were found
+    let acknowledgment = '';
+    if (newHighConfidenceInterests.length > 0) {
+        const interestList = newHighConfidenceInterests.map(i => `"${i.keyword}"`).join(', ');
+        acknowledgment = `I'm learning that you enjoy ${interestList}. I'll remember that!`;
+        console.log("💬 Acknowledgment:", acknowledgment);
     }
 
     // Get the AI response using Vercel AI SDK
-    console.log("Calling OpenAI...");
     try {
         const result = await streamText({
             model: openai("gpt-4o-mini"),
             messages: [
                 ...messages,
+                ...(acknowledgment ? [{ role: "assistant", content: acknowledgment }] : []),
                 {
                     role: "system",
-                    content: `You are a friendly event recommendation assistant. You know about all local events and want to help users find activities they'll enjoy.
+                    content: `You're a friendly event recommendation assistant who helps people discover fun activities in their area. You have access to a curated list of local events and want to help users find things they'll love.
 
-When recommending events:
-- Be conversational and enthusiastic
-- Ask clarifying questions if too many events match (continue until you have 3 or fewer clear matches)
-- Focus on category, activity level, and skill requirements
-- Don't mention time/location (handled separately)
-- Limit to 3 events maximum
+Important: Only recommend events from the "Available Events" list below. Don't make up or invent events that aren't in this list. If no events are available, just let the user know and ask them to tell you more about what they enjoy.
 
-If you have good matches, include them in your response like this:
+When you have good event matches, include them in your response like this:
 <events>
 [{"id": "event_id", "title": "Event Title", "description": "Description", "categories": ["category1"], "attendeesCount": 5, "interestedCount": 3, "location": {"neighborhood": "Area"}}]
 </events>
 
-If you don't have enough information about the user's interests, tell them you need to learn more about what they enjoy.
+Be conversational and enthusiastic! Ask follow-up questions if needed to narrow down the best matches. Focus on what makes each event special and why the user might enjoy it.
 
 User Interests: ${userInterests ? JSON.stringify(userInterests) : 'none'}
 Available Events: ${matchedEvents.length > 0 ? JSON.stringify(matchedEvents) : 'none'}`
@@ -169,7 +171,6 @@ Available Events: ${matchedEvents.length > 0 ? JSON.stringify(matchedEvents) : '
                         content: completion.text,
                         role: "assistant"
                     });
-                    console.log("AI message saved to database");
 
                     // Record event recommendations if any were made
                     if (matchedEvents.length > 0) {
@@ -180,14 +181,13 @@ Available Events: ${matchedEvents.length > 0 ? JSON.stringify(matchedEvents) : '
                                 messages[messages.length - 1].content
                             );
                         }
-                        console.log("Event recommendations recorded");
+                        console.log("✅ Event recommendations recorded");
                     }
                 } catch (error) {
                     console.error("Error saving AI message:", error);
                 }
             },
         });
-        console.log("OpenAI response received, returning stream");
 
         // Return the streaming response immediately
         const response = result.toDataStreamResponse();
@@ -197,7 +197,6 @@ Available Events: ${matchedEvents.length > 0 ? JSON.stringify(matchedEvents) : '
         response.headers.set('Connection', 'keep-alive');
         response.headers.set('X-Accel-Buffering', 'no');
 
-        console.log("Response headers:", Object.fromEntries(response.headers.entries()));
         return response;
     } catch (error) {
         console.error("Error calling OpenAI:", error);
@@ -207,21 +206,9 @@ Available Events: ${matchedEvents.length > 0 ? JSON.stringify(matchedEvents) : '
 
 // GET endpoint to fetch user's message history
 export async function GET(req: Request) {
-    console.log("=== GET /api/chat - Request received ===");
-    console.log("Request URL:", req.url);
-    console.log("Request method:", req.method);
-    console.log("Request origin:", req.headers.get('origin'));
-    console.log("Request user-agent:", req.headers.get('user-agent'));
-    console.log("All request headers:", Object.fromEntries(req.headers.entries()));
-
-    console.log("Attempting to get session for GET request...");
     const session = await auth.api.getSession({ headers: req.headers });
-    console.log("GET Session result:", session);
-    console.log("GET Session user ID:", session?.user?.id);
-    console.log("GET Session authenticated:", session?.user?.id ? "YES" : "NO");
 
     if (!session?.user?.id) {
-        console.log("GET request unauthorized - no session");
         return new Response("Unauthorized", { status: 401 });
     }
 

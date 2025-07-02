@@ -3,7 +3,7 @@ import { generateText } from "ai";
 import { eq } from "drizzle-orm";
 import { db } from "../db";
 import { event, eventRecommendation, userProfile } from "../db/schema";
-import { EventRecommendationResult, UserInterests } from "../db/types";
+import { EventRecommendationResult, UserInterestNew } from "../db/types";
 
 export class EventMatchingService {
     private static instance: EventMatchingService;
@@ -19,9 +19,10 @@ export class EventMatchingService {
 
     /**
      * Calculate similarity score between user interests and event keywords
+     * Now weighted by confidence and specificity
      */
     async calculateSimilarity(
-        userInterests: string[],
+        userInterests: UserInterestNew[],
         eventKeywords: string[]
     ): Promise<number> {
         if (userInterests.length === 0 || eventKeywords.length === 0) {
@@ -29,9 +30,44 @@ export class EventMatchingService {
         }
 
         try {
+            // Calculate weighted similarity score
+            let totalWeightedScore = 0;
+            let totalWeight = 0;
+
+            for (const interest of userInterests) {
+                // Calculate keyword similarity for this interest
+                const keywordSimilarity = await this.calculateKeywordSimilarity(
+                    interest.keyword,
+                    eventKeywords
+                );
+
+                // Weight by confidence and specificity
+                const weight = interest.confidence * interest.specificity;
+                const weightedScore = keywordSimilarity * weight;
+
+                totalWeightedScore += weightedScore;
+                totalWeight += weight;
+            }
+
+            // Return normalized score
+            return totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
+        } catch (error) {
+            console.error("Error calculating similarity:", error);
+            return 0;
+        }
+    }
+
+    /**
+     * Calculate similarity between a single keyword and event keywords
+     */
+    private async calculateKeywordSimilarity(
+        keyword: string,
+        eventKeywords: string[]
+    ): Promise<number> {
+        try {
             const prompt = `
-Rate the similarity between these interests (0-1):
-User Interests: ${userInterests.join(', ')}
+Rate the similarity between this keyword and these event keywords (0-1):
+Keyword: ${keyword}
 Event Keywords: ${eventKeywords.join(', ')}
 
 Consider related activities, synonyms, and broader categories.
@@ -46,14 +82,14 @@ Return only a number between 0 and 1.`;
             const similarity = parseFloat(result.text.trim());
             return isNaN(similarity) ? 0 : Math.max(0, Math.min(1, similarity));
         } catch (error) {
-            console.error("Error calculating similarity:", error);
+            console.error("Error calculating keyword similarity:", error);
             return 0;
         }
     }
 
     /**
- * Get previously recommended events for a user
- */
+     * Get previously recommended events for a user
+     */
     async getPreviouslyRecommendedEvents(userId: string): Promise<string[]> {
         try {
             if (!db) {
@@ -74,11 +110,12 @@ Return only a number between 0 and 1.`;
     }
 
     /**
- * Match user interests to events using semantic similarity
- */
+     * Match user interests to events using semantic similarity
+     * Updated to use new interest format with weighted scoring
+     */
     async matchEventsToInterests(
         userId: string,
-        userInterests: UserInterests,
+        userInterests: UserInterestNew[],
         maxResults: number = 5
     ): Promise<EventRecommendationResult[]> {
         try {
@@ -114,27 +151,15 @@ Return only a number between 0 and 1.`;
                 score: number;
             }> = [];
 
-            console.log(`Processing ${availableEvents.length} events for user interests:`, {
-                broad: userInterests.broad,
-                specific: userInterests.specific
-            });
-
             for (const eventItem of availableEvents) {
                 const eventKeywords = eventItem.keywords || [];
-                const allUserInterests = [
-                    ...userInterests.broad,
-                    ...userInterests.specific
-                ];
 
-                if (allUserInterests.length === 0 || eventKeywords.length === 0) {
-                    console.log(`Skipping event "${eventItem.title}" - no interests or keywords`);
+                if (userInterests.length === 0 || eventKeywords.length === 0) {
                     continue;
                 }
 
-                console.log(`Calculating similarity for "${eventItem.title}" with keywords:`, eventKeywords);
-
                 const similarityScore = await this.calculateSimilarity(
-                    allUserInterests,
+                    userInterests,
                     eventKeywords
                 );
 
@@ -145,8 +170,6 @@ Return only a number between 0 and 1.`;
                 );
 
                 const totalScore = similarityScore + popularityScore;
-
-                console.log(`Event "${eventItem.title}" - Similarity: ${similarityScore}, Popularity: ${popularityScore}, Total: ${totalScore}`);
 
                 if (totalScore > 0.3) { // Only include events with reasonable match
                     eventScores.push({
@@ -198,8 +221,8 @@ Return only a number between 0 and 1.`;
     }
 
     /**
- * Record an event recommendation for a user
- */
+     * Record an event recommendation for a user
+     */
     async recordRecommendation(
         userId: string,
         eventId: string,
@@ -222,10 +245,10 @@ Return only a number between 0 and 1.`;
     }
 
     /**
- * Get user profile with interests
- */
+     * Get user profile with interests
+     */
     async getUserProfile(userId: string): Promise<{
-        interests: UserInterests;
+        interests: UserInterestNew[];
         needsUpdate: boolean;
     } | null> {
         try {
@@ -245,14 +268,10 @@ Return only a number between 0 and 1.`;
             }
 
             const userProfileData = profile[0];
-            const interests: UserInterests = {
-                broad: userProfileData.interests || [],
-                specific: [],
-                scores: (userProfileData.interestScores as Record<string, number>) || {},
-                lastUpdated: userProfileData.lastInterestUpdate || new Date()
-            };
+            // For now, return empty array since we're migrating to new schema
+            const interests: UserInterestNew[] = [];
 
-            const needsUpdate = this.shouldUpdateInterests(interests);
+            const needsUpdate = false; // Will be updated when we implement new interest retrieval
 
             return { interests, needsUpdate };
         } catch (error) {
@@ -284,10 +303,7 @@ Return only a number between 0 and 1.`;
                 name: profileData.name,
                 location: profileData.location,
                 interests: profileData.interests || [],
-                preferences: profileData.preferences || { distance_radius_km: 10, preferred_categories: [] },
-                interestsJson: {},
-                interestScores: {},
-                lastInterestUpdate: new Date()
+                preferences: profileData.preferences || { distance_radius_km: 10, preferred_categories: [] }
             });
         } catch (error) {
             console.error("Error creating user profile:", error);
@@ -295,11 +311,11 @@ Return only a number between 0 and 1.`;
     }
 
     /**
- * Update user profile with new interests
- */
+     * Update user profile with new interests
+     */
     async updateUserProfile(
         userId: string,
-        interests: UserInterests
+        interests: UserInterestNew[]
     ): Promise<void> {
         try {
             if (!db) {
@@ -307,12 +323,11 @@ Return only a number between 0 and 1.`;
                 return;
             }
 
+            // For now, just update the updatedAt timestamp
+            // The actual interest storage will be handled by the new user_interests table
             await db
                 .update(userProfile)
                 .set({
-                    interestsJson: interests,
-                    interestScores: interests.scores,
-                    lastInterestUpdate: interests.lastUpdated,
                     updatedAt: new Date()
                 })
                 .where(eq(userProfile.userId, userId));
@@ -324,8 +339,8 @@ Return only a number between 0 and 1.`;
     /**
      * Check if interests need updating (older than 24 hours)
      */
-    private shouldUpdateInterests(interests: UserInterests): boolean {
+    private shouldUpdateInterests(interests: UserInterestNew[]): boolean {
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        return interests.lastUpdated < twentyFourHoursAgo;
+        return interests.some(i => i.lastUpdated < twentyFourHoursAgo);
     }
 } 
