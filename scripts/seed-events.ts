@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import { drizzle } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
 import { db } from '../lib/db';
 import { event } from '../lib/db/schema';
 import { EventCategory } from '../lib/db/types';
@@ -7,22 +9,12 @@ import { EventCategory } from '../lib/db/types';
 const databaseUrl = process.env.EXPO_PUBLIC_DATABASE_URL || process.env.DATABASE_URL;
 
 if (!databaseUrl) {
-    console.error('❌ Database URL not found!');
-    console.log('');
-    console.log('To run this script, you need to set the DATABASE_URL environment variable.');
-    console.log('');
-    console.log('You can do this by:');
-    console.log('1. Creating a .env file in the root directory with:');
-    console.log('   DATABASE_URL=your_database_connection_string');
-    console.log('');
-    console.log('2. Or running the command with the environment variable:');
-    console.log('   DATABASE_URL=your_database_connection_string npm run db:seed');
-    console.log('');
-    console.log('3. Or setting EXPO_PUBLIC_DATABASE_URL for Expo:');
-    console.log('   EXPO_PUBLIC_DATABASE_URL=your_database_connection_string npm run db:seed');
-    console.log('');
     process.exit(1);
 }
+
+// Create database connection
+const client = postgres(databaseUrl);
+const db = drizzle(client);
 
 // Hardcoded meetup events with category overlap
 const meetupEvents = [
@@ -349,71 +341,15 @@ const meetupEvents = [
 // Main seeding function
 async function seedEvents() {
     try {
-        console.log('🌱 Starting event seeding...');
-        console.log(`🔗 Database URL: ${databaseUrl?.substring(0, 20)}...`);
-
-        if (!db) {
-            console.error('❌ Database connection not available');
-            return;
-        }
-
-        // Delete all old events before seeding
-        console.log('🗑️ Deleting all old events...');
+        // Delete all existing events
         await db.delete(event);
 
-        console.log(`📝 Generated ${meetupEvents.length} meetup events`);
+        // Insert new events
+        await db.insert(event).values(meetupEvents);
 
-        // Insert events into database
-        console.log('💾 Inserting events into database...');
-
-        for (const eventData of meetupEvents) {
-            // Generate dates over the next 3 months
-            const daysFromNow = Math.floor(Math.random() * 90) + 1;
-            const hoursFromNow = Math.floor(Math.random() * 24);
-            const minutesFromNow = Math.floor(Math.random() * 60);
-
-            const eventDate = new Date();
-            eventDate.setDate(eventDate.getDate() + daysFromNow);
-            eventDate.setHours(hoursFromNow, minutesFromNow, 0, 0);
-
-            await db.insert(event).values({
-                title: eventData.title,
-                date: eventDate,
-                location: eventData.location,
-                description: eventData.description,
-                categories: eventData.categories,
-                keywords: eventData.keywords,
-                attendeesCount: Math.floor(Math.random() * 50) + 5,
-                interestedCount: Math.floor(Math.random() * 100) + 10
-            });
-        }
-
-        console.log('✅ Successfully seeded events!');
-        console.log(`📊 Total events created: ${meetupEvents.length}`);
-
-        // Show breakdown by category
-        const categoryCounts = meetupEvents.reduce((acc, event) => {
-            event.categories.forEach(category => {
-                acc[category] = (acc[category] || 0) + 1;
-            });
-            return acc;
-        }, {} as Record<string, number>);
-
-        console.log('📈 Events by category:');
-        Object.entries(categoryCounts).forEach(([category, count]) => {
-            console.log(`   ${category}: ${count} events`);
-        });
-
-        console.log('\n🎯 Category overlap examples:');
-        console.log('   Fitness + Social: 8 events');
-        console.log('   Technology + Business: 6 events');
-        console.log('   Creative + Social: 7 events');
-        console.log('   Food + Social: 9 events');
-
-    } catch (error) {
-        console.error('❌ Error seeding events:', error);
-    } finally {
         process.exit(0);
+    } catch (error) {
+        process.exit(1);
     }
 }
 

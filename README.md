@@ -1,141 +1,158 @@
-## 🗄 Database Schema
+# Who-All: Chat-Driven Event Recommender
 
-The app uses a comprehensive database schema with the following main entities:
+A React Native app where NYC users chat with an AI assistant that learns their interests over time and recommends relevant in-person events based on semantic similarity.
 
-- **Users**: Authentication and profile management
-- **Events**: Event details with categories, location, and attendance tracking
-- **Messages**: Chat history for AI conversations
-- **Event Interactions**: User engagement tracking (interested, going, not interested)
-- **User Profiles**: Preferences and location settings
+## 🎯 Overview
 
-## 🚀 Getting Started
+Who-All is an intelligent event discovery platform that uses conversational AI to understand user preferences and automatically match them with compatible events and people in NYC. Instead of manual profile setup, users simply chat naturally with our AI assistant, which builds a comprehensive interest profile through conversation.
+
+## ✨ Key Features
+
+- **Conversational Interest Discovery**: Chat with an AI assistant that naturally extracts your interests through friendly conversation
+- **Semantic Event Matching**: Advanced embedding-based matching using OpenAI's text-embedding-3-small model
+- **Automatic Event Generation**: System creates events based on interest clusters and public NYC locations
+- **Privacy-First Design**: Your chat history and interests are private, with controlled visibility of other attendees
+
+## 🚀 How It Works
+
+1. **Sign Up & Chat**: Create an account and start chatting with our AI assistant
+2. **Interest Building**: The AI learns your preferences through natural conversation
+3. **Profile Generation**: Your interests are summarized and converted to vector embeddings
+4. **Event Matching**: System finds events with high semantic similarity to your interests
+5. **Event Discovery**: Browse and join events that match your profile
+
+## 🏗️ Technical Architecture
+
+### Core Components
+
+- **AI Assistant**: GPT-powered conversational interface for interest discovery
+- **Embedding Engine**: OpenAI embeddings for user interests and event descriptions
+- **Matching Algorithm**: Cosine similarity-based event recommendations
+- **Event Generator**: Automated event creation based on interest clusters
+
+### Tech Stack
+
+- **Frontend**: React Native with Expo
+- **Backend**: Node.js with Express
+- **Database**: SQLite with Drizzle ORM
+- **AI**: OpenAI GPT and Embeddings API
+- **Authentication**: Custom auth system
+
+## 📱 User Flow
+
+```
+Sign Up → Chat with AI → Build Interest Profile → Get Event Recommendations → Join Events
+```
+
+## 🔐 Privacy & Data
+
+- Account required for all features
+- Chat history and interest summaries are private
+- User visibility controlled by privacy settings
+- Full account deletion removes all personal data
+
+## 🎯 MVP Success Criteria
+
+- Users feel the AI understands their interests
+- Events are relevant and accurately matched
+- Users successfully join events from recommendations
+- Embedding system outperforms manual tagging
+
+## 🚧 Development Status
+
+This is an MVP (Minimum Viable Product) with the following scope:
+
+### ✅ In Scope
+- User authentication
+- AI chat interface
+- Interest profile building
+- Event matching and recommendations
+- Basic event management
+
+### 🚫 Out of Scope (Future Versions)
+- Calendar integration
+- Group chat features
+- User-submitted events
+- Friend system
+- Push notifications
+
+## 🛠️ Getting Started
 
 ### Prerequisites
-- Node.js 18+ 
+- Node.js 18+
 - Expo CLI
-- PostgreSQL database (Neon recommended)
+- OpenAI API key
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd who-all2
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Environment Setup**
-   Create a `.env` file in the root directory:
-   ```env
-   EXPO_PUBLIC_DATABASE_URL=your_postgresql_connection_string
-   OPENAI_API_KEY=your_openai_api_key
-   ```
-
-4. **Database Setup**
-   ```bash
-   # Generate and run migrations
-   npm run db:generate
-   npm run db:migrate
-   
-   # Seed with sample events
-   npm run db:seed
-   ```
-
-5. **Start Development Server**
-   ```bash
-   npm start
-   ```
-
-### Available Scripts
-
-- `npm start` - Start Expo development server
-- `npm run ios` - Run on iOS simulator
-- `npm run android` - Run on Android emulator
-- `npm run web` - Run in web browser
-- `npm run lint` - Run ESLint
-- `npm run db:generate` - Generate database migrations
-- `npm run db:migrate` - Run database migrations
-- `npm run db:studio` - Open Drizzle Studio
-- `npm run db:seed` - Seed database with sample events
-
-## 🎨 Key Components
-
-### Event Discovery
-The main events screen (`app/(tabs)/index.tsx`) features:
-- Category-based filtering
-- Event cards with date/time formatting
-- Location display with neighborhood information
-- Attendance statistics
-- Responsive design with proper loading states
-
-### AI Chat Interface
-The chat screen (`app/(tabs)/chat.tsx`) provides:
-- Real-time messaging with AI assistant
-- Message history persistence
-- Authentication integration
-- Responsive input handling
-
-### Authentication
-Secure authentication flow with:
-- Email/password sign-in and sign-up
-- Session management
-- Protected routes
-- Better Auth integration
-
-## 🎯 Configuration
-
-### App Configuration
-The app is configured via `app.config.js` with:
-- Expo settings for iOS, Android, and Web
-- Custom scheme for deep linking
-- Environment variable integration
-- Splash screen and icon configuration
-
-### Database Configuration
-Database setup includes:
-- Drizzle ORM configuration
-- Migration management
-- Type-safe schema definitions
-- Connection pooling with Neon
-
-## 🚀 Deployment
-
-### Expo Build
+1. Clone the repository:
 ```bash
-# Build for production
-expo build:ios
-expo build:android
+git clone https://github.com/yourusername/who-all2.git
+cd who-all2
 ```
 
-### Web Deployment
+2. Install dependencies:
 ```bash
-# Build for web
-expo export:web
+npm install
+```
+
+3. Set up environment variables:
+```bash
+cp .env.example .env
+# Add your OpenAI API key and other configuration
+```
+
+4. Run the development server:
+```bash
+npx expo start
+```
+
+## 📊 Data Models
+
+### User
+```typescript
+{
+  id: string
+  name: string
+  location: string
+  interestSummary: string
+  interestEmbedding: float[]
+  chatHistory: Message[]
+  createdAt: Date
+}
+```
+
+### Event
+```typescript
+{
+  id: string
+  title: string
+  description: string
+  location: string
+  date: Date
+  creator: "system"
+  eventEmbedding: float[]
+  interestedUserIds: string[]
+  createdAt: Date
+}
 ```
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## 📄 License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🆘 Support
 
-For support and questions:
-- Check the [Expo documentation](https://docs.expo.dev/)
-- Review [Drizzle ORM docs](https://orm.drizzle.team/)
-- Consult [Better Auth documentation](https://better-auth.com/)
+For support, email support@who-all.com or join our Discord community.
 
 ---
 
-Built with ❤️ using React Native and Expo
+Built with ❤️ for the NYC community
