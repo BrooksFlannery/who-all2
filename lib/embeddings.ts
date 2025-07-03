@@ -147,19 +147,47 @@ export async function getEventRecommendations(userId: string): Promise<Array<{
             })
             .sort((a, b) => b.similarity - a.similarity); // Sort by similarity descending
 
+        // Limit to top 15 recommendations
+        const topRecommendations = recommendations.slice(0, 15);
+
+        // Update user's cached recommendations
+        await updateUserRecommendedEvents(userId, topRecommendations.map(r => r.id));
+
         // Console log results as specified
         console.log('🎯 Event Recommendations:');
         console.log(`📊 Found ${recommendations.length} events with embeddings`);
         console.log(`👤 Comparing against user ${userId}`);
-        recommendations.forEach((rec, index) => {
+        console.log(`📝 Caching top ${topRecommendations.length} recommendations`);
+        topRecommendations.forEach((rec, index) => {
             console.log(`#${index + 1} ${rec.title}: ${rec.similarity.toFixed(4)}`);
             console.log(`  📝 ${rec.description}`);
         });
 
-        return recommendations;
+        return topRecommendations;
     } catch (error) {
         console.error('Error getting event recommendations:', error);
         return [];
+    }
+}
+
+/**
+ * Update user's cached recommended event IDs
+ */
+async function updateUserRecommendedEvents(userId: string, eventIds: string[]): Promise<void> {
+    if (!db) return;
+
+    try {
+        await db.update(user)
+            .set({
+                recommendedEventIds: eventIds,
+                updatedAt: new Date()
+            })
+            .where(eq(user.id, userId));
+
+        console.log(`Updated cached recommendations for user ${userId}: ${eventIds.length} events`);
+    } catch (error) {
+        console.error('Error updating user recommended events:', error);
+        // Don't throw - fail gracefully
     }
 }
 
