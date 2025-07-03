@@ -3,9 +3,11 @@ import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { event } from '../lib/db/schema';
 import { EventCategory } from '../lib/db/types';
+import { validateEnv } from '../lib/validation';
 
-// Check environment variables
-const databaseUrl = process.env.EXPO_PUBLIC_DATABASE_URL || process.env.DATABASE_URL;
+// Validate environment variables
+const env = validateEnv();
+const databaseUrl = env.DATABASE_URL;
 
 if (!databaseUrl) {
     console.error('DATABASE_URL is not defined');
@@ -348,13 +350,17 @@ const meetupEvents = [
 // Main seeding function
 async function seedEvents() {
     try {
+        console.log('Starting event seeding...');
+
         // Delete all existing events
+        console.log('Clearing existing events...');
         await db.delete(event);
 
         // Insert new events
+        console.log('Inserting new events...');
         await db.insert(event).values(meetupEvents);
 
-        console.log('Successfully seeded events!');
+        console.log('✅ Successfully seeded events!');
         process.exit(0);
     } catch (error) {
         console.error('Error seeding events:', error);

@@ -1,5 +1,5 @@
 {
-  "id": "e444d878-c119-4fa9-ab4d-aa3fb25626bb",
+  "id": "5cbf45d0-f341-4ded-a054-3b9823a78e33",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -150,13 +150,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "keywords": {
-          "name": "keywords",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'{}'"
-        },
         "host_id": {
           "name": "host_id",
           "type": "text",
@@ -294,66 +287,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.event_keyword": {
-      "name": "event_keyword",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "event_id": {
-          "name": "event_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "keyword": {
-          "name": "keyword",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "weight": {
-          "name": "weight",
-          "type": "numeric(3, 2)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'1.00'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "event_keyword_event_id_event_id_fk": {
-          "name": "event_keyword_event_id_event_id_fk",
-          "tableFrom": "event_keyword",
-          "tableTo": "event",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.message": {
       "name": "message",
       "schema": "",
@@ -376,6 +309,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "is_summarized": {
+          "name": "is_summarized",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "createdAt": {
           "name": "createdAt",
@@ -531,6 +471,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "user_interest_summary": {
+          "name": "user_interest_summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -556,175 +503,6 @@
           ]
         }
       },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.user_event_recommendation": {
-      "name": "user_event_recommendation",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "event_id": {
-          "name": "event_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "recommendation_score": {
-          "name": "recommendation_score",
-          "type": "numeric(5, 4)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "shown_at": {
-          "name": "shown_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "user_feedback": {
-          "name": "user_feedback",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "user_event_recommendation_user_id_user_id_fk": {
-          "name": "user_event_recommendation_user_id_user_id_fk",
-          "tableFrom": "user_event_recommendation",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "user_event_recommendation_event_id_event_id_fk": {
-          "name": "user_event_recommendation_event_id_event_id_fk",
-          "tableFrom": "user_event_recommendation",
-          "tableTo": "event",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.user_interest": {
-      "name": "user_interest",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "keyword": {
-          "name": "keyword",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "confidence_score": {
-          "name": "confidence_score",
-          "type": "numeric(3, 2)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "specificity_score": {
-          "name": "specificity_score",
-          "type": "numeric(3, 2)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source_message_id": {
-          "name": "source_message_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "user_interest_user_id_user_id_fk": {
-          "name": "user_interest_user_id_user_id_fk",
-          "tableFrom": "user_interest",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "user_interest_source_message_id_message_id_fk": {
-          "name": "user_interest_source_message_id_message_id_fk",
-          "tableFrom": "user_interest",
-          "tableTo": "message",
-          "columnsFrom": [
-            "source_message_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

@@ -1,6 +1,13 @@
 // TypeScript types for our database schema
 import { InferInsertModel, InferSelectModel } from 'drizzle-orm';
-import { event, eventInteraction, user, userProfile } from './schema';
+import { event, message, user } from './schema';
+
+// Import Zod types for runtime validation
+import type {
+    Event as ZodEvent,
+    EventCategory as ZodEventCategory,
+    Location as ZodLocation
+} from '../schemas';
 
 // Base types from our schema
 export type Event = {
@@ -18,11 +25,10 @@ export type Event = {
 };
 
 export type EventInsert = InferInsertModel<typeof event>;
-export type UserProfile = InferSelectModel<typeof userProfile>;
-export type UserProfileInsert = InferInsertModel<typeof userProfile>;
-export type EventInteraction = InferSelectModel<typeof eventInteraction>;
-export type EventInteractionInsert = InferInsertModel<typeof eventInteraction>;
+
 export type User = InferSelectModel<typeof user>;
+export type Message = InferSelectModel<typeof message>;
+export type MessageInsert = InferInsertModel<typeof message>;
 
 // Custom types for better type safety
 export type Location = {
@@ -48,15 +54,14 @@ export type EventCategory =
     | "business"
     | "other";
 
-export type InteractionStatus = "interested" | "going" | "not_interested";
-export type InteractionSource = "chat" | "browse" | "external";
+
 
 // Helper types for API responses
 export type EventWithInteractions = Event & {
-    userInteraction?: EventInteraction;
     host?: User;
 };
 
-export type UserProfileWithUser = UserProfile & {
-    user: User;
-};
+// Zod-compatible types for runtime validation
+export type ZodValidatedEvent = ZodEvent;
+export type ZodValidatedEventCategory = ZodEventCategory;
+export type ZodValidatedLocation = ZodLocation;

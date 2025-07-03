@@ -1,6 +1,6 @@
 {
-  "id": "063d70c9-f1d0-4959-8de4-4818fd94fa36",
-  "prevId": "e444d878-c119-4fa9-ab4d-aa3fb25626bb",
+  "id": "8e183d80-5356-4208-b23b-3c64fa2b0440",
+  "prevId": "5cbf45d0-f341-4ded-a054-3b9823a78e33",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -150,13 +150,6 @@
           "primaryKey": false,
           "notNull": true
         },
-        "keywords": {
-          "name": "keywords",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "'{}'"
-        },
         "host_id": {
           "name": "host_id",
           "type": "text",
@@ -214,86 +207,6 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.event_interaction": {
-      "name": "event_interaction",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "event_id": {
-          "name": "event_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "interaction_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source": {
-          "name": "source",
-          "type": "interaction_source",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "event_interaction_user_id_user_id_fk": {
-          "name": "event_interaction_user_id_user_id_fk",
-          "tableFrom": "event_interaction",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "event_interaction_event_id_event_id_fk": {
-          "name": "event_interaction_event_id_event_id_fk",
-          "tableFrom": "event_interaction",
-          "tableTo": "event",
-          "columnsFrom": [
-            "event_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.message": {
       "name": "message",
       "schema": "",
@@ -316,6 +229,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "is_summarized": {
+          "name": "is_summarized",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "createdAt": {
           "name": "createdAt",
@@ -471,6 +391,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "user_interest_summary": {
+          "name": "user_interest_summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -493,105 +420,6 @@
           "nullsNotDistinct": false,
           "columns": [
             "email"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.user_profile": {
-      "name": "user_profile",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "location": {
-          "name": "location",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "interests": {
-          "name": "interests",
-          "type": "text[]",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "preferences": {
-          "name": "preferences",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "last_interest_analysis": {
-          "name": "last_interest_analysis",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "interest_analysis_version": {
-          "name": "interest_analysis_version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 1
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "user_profile_user_id_user_id_fk": {
-          "name": "user_profile_user_id_user_id_fk",
-          "tableFrom": "user_profile",
-          "tableTo": "user",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "user_profile_user_id_unique": {
-          "name": "user_profile_user_id_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "user_id"
           ]
         }
       },
@@ -664,24 +492,6 @@
         "outdoors",
         "business",
         "other"
-      ]
-    },
-    "public.interaction_source": {
-      "name": "interaction_source",
-      "schema": "public",
-      "values": [
-        "chat",
-        "browse",
-        "external"
-      ]
-    },
-    "public.interaction_status": {
-      "name": "interaction_status",
-      "schema": "public",
-      "values": [
-        "interested",
-        "going",
-        "not_interested"
       ]
     },
     "public.role": {
