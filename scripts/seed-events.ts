@@ -1,20 +1,29 @@
+import { neon } from '@neondatabase/serverless';
 import 'dotenv/config';
-import { drizzle } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
-import { db } from '../lib/db';
+import { drizzle } from 'drizzle-orm/neon-http';
 import { event } from '../lib/db/schema';
 import { EventCategory } from '../lib/db/types';
+import { validateEnv } from '../lib/validation';
 
-// Check environment variables
-const databaseUrl = process.env.EXPO_PUBLIC_DATABASE_URL || process.env.DATABASE_URL;
+// Validate environment variables
+const env = validateEnv();
+const databaseUrl = env.DATABASE_URL;
 
 if (!databaseUrl) {
+    console.error('DATABASE_URL is not defined');
     process.exit(1);
 }
 
-// Create database connection
-const client = postgres(databaseUrl);
-const db = drizzle(client);
+// Create database connection using the same pattern as lib/db/index.ts
+const sql = neon(databaseUrl);
+const db = drizzle(sql);
+
+// Helper function to create future dates
+const createFutureDate = (daysFromNow: number) => {
+    const date = new Date();
+    date.setDate(date.getDate() + daysFromNow);
+    return date;
+};
 
 // Hardcoded meetup events with category overlap
 const meetupEvents = [
@@ -24,21 +33,21 @@ const meetupEvents = [
         description: "Join our weekly running group! All paces welcome. We meet at Golden Gate Park and run 3-5 miles together.",
         categories: ['fitness', 'social'] as EventCategory[],
         location: { lat: 37.7849, lng: -122.4994, neighborhood: 'Golden Gate Park' },
-        keywords: ['running', 'fitness', 'social', 'outdoors', 'exercise', 'group', 'weekly']
+        date: createFutureDate(2),
     },
     {
         title: "Yoga & Coffee Meetup",
         description: "Start your day with gentle yoga followed by coffee and conversation with fellow wellness enthusiasts.",
         categories: ['fitness', 'social', 'food'] as EventCategory[],
         location: { lat: 37.7749, lng: -122.4194, neighborhood: 'Downtown' },
-        keywords: ['yoga', 'fitness', 'coffee', 'social', 'wellness', 'morning', 'conversation']
+        date: createFutureDate(3),
     },
     {
         title: "Hiking & Photography Group",
         description: "Explore beautiful trails while learning photography tips. Great for nature lovers and creative minds.",
         categories: ['fitness', 'outdoors', 'creative'] as EventCategory[],
         location: { lat: 37.7649, lng: -122.4694, neighborhood: 'Pacific Heights' },
-        keywords: ['hiking', 'photography', 'outdoors', 'nature', 'creative', 'trails', 'learning']
+        date: createFutureDate(5),
     },
 
     // Technology + Social overlap
@@ -47,21 +56,21 @@ const meetupEvents = [
         description: "Weekly meetup for tech professionals to network over coffee. Share ideas, find collaborators, make connections.",
         categories: ['technology', 'social', 'business'] as EventCategory[],
         location: { lat: 37.7849, lng: -122.4094, neighborhood: 'North Beach' },
-        keywords: ['technology', 'networking', 'coffee', 'professional', 'business', 'collaboration', 'weekly']
+        date: createFutureDate(1),
     },
     {
         title: "Coding & Pizza Night",
         description: "Work on coding projects together while enjoying pizza. Perfect for developers looking to collaborate.",
         categories: ['technology', 'social', 'food'] as EventCategory[],
         location: { lat: 37.7649, lng: -122.4294, neighborhood: 'Mission District' },
-        keywords: ['coding', 'technology', 'pizza', 'social', 'collaboration', 'developers', 'projects']
+        date: createFutureDate(4),
     },
     {
         title: "Startup Founders Meetup",
         description: "Connect with fellow entrepreneurs, share challenges, and explore potential partnerships.",
         categories: ['technology', 'business', 'social'] as EventCategory[],
         location: { lat: 37.7749, lng: -122.4494, neighborhood: 'Hayes Valley' },
-        keywords: ['startup', 'entrepreneurs', 'business', 'technology', 'partnerships', 'challenges', 'networking']
+        date: createFutureDate(6),
     },
 
     // Creative + Social overlap
@@ -70,21 +79,21 @@ const meetupEvents = [
         description: "Create art together while enjoying wine and good conversation. All skill levels welcome!",
         categories: ['creative', 'social', 'food'] as EventCategory[],
         location: { lat: 37.7549, lng: -122.4394, neighborhood: 'Castro' },
-        keywords: ['art', 'creative', 'wine', 'social', 'conversation', 'painting', 'relaxation']
+        date: createFutureDate(2),
     },
     {
         title: "Photography Walk & Brunch",
         description: "Capture the city's beauty on camera, then share photos over brunch with fellow photographers.",
         categories: ['creative', 'outdoors', 'food'] as EventCategory[],
         location: { lat: 37.7849, lng: -122.4594, neighborhood: 'Marina' },
-        keywords: ['photography', 'creative', 'brunch', 'outdoors', 'city', 'walking', 'sharing']
+        date: createFutureDate(7),
     },
     {
         title: "Craft Beer & Music Jam",
         description: "Bring your instruments and join our casual music session while sampling local craft beers.",
         categories: ['creative', 'music', 'food'] as EventCategory[],
         location: { lat: 37.7549, lng: -122.4794, neighborhood: 'Richmond' },
-        keywords: ['music', 'craft beer', 'creative', 'instruments', 'jam session', 'casual', 'local']
+        date: createFutureDate(3),
     },
 
     // Education + Various overlaps
@@ -93,21 +102,21 @@ const meetupEvents = [
         description: "Practice languages with native speakers while enjoying coffee. Multiple languages welcome!",
         categories: ['education', 'social', 'food'] as EventCategory[],
         location: { lat: 37.7749, lng: -122.4894, neighborhood: 'Sunset' },
-        keywords: ['language', 'exchange', 'education', 'coffee', 'social', 'practice', 'multilingual']
+        date: createFutureDate(4),
     },
     {
         title: "Financial Literacy Workshop",
         description: "Learn about personal finance, investing, and budgeting in a supportive group environment.",
         categories: ['education', 'business'] as EventCategory[],
         location: { lat: 37.7749, lng: -122.4194, neighborhood: 'Downtown' },
-        keywords: ['financial', 'literacy', 'education', 'investing', 'budgeting', 'workshop', 'personal finance']
+        date: createFutureDate(8),
     },
     {
         title: "Public Speaking Practice",
         description: "Improve your public speaking skills in a friendly, supportive environment. All levels welcome.",
         categories: ['education', 'social', 'business'] as EventCategory[],
         location: { lat: 37.7849, lng: -122.4094, neighborhood: 'North Beach' },
-        keywords: ['public speaking', 'education', 'social', 'practice', 'skills', 'supportive', 'confidence']
+        date: createFutureDate(5),
     },
 
     // Food + Various overlaps
@@ -116,21 +125,21 @@ const meetupEvents = [
         description: "Learn to cook delicious dishes while sampling fine wines. Great for food and wine enthusiasts.",
         categories: ['food', 'education', 'social'] as EventCategory[],
         location: { lat: 37.7649, lng: -122.4294, neighborhood: 'Mission District' },
-        keywords: ['cooking', 'class', 'wine', 'tasting', 'food', 'education', 'gourmet']
+        date: createFutureDate(6),
     },
     {
         title: "Farmers Market Tour & Brunch",
         description: "Explore local farmers markets together, then enjoy a community brunch with fresh ingredients.",
         categories: ['food', 'outdoors', 'social'] as EventCategory[],
         location: { lat: 37.7749, lng: -122.4494, neighborhood: 'Hayes Valley' },
-        keywords: ['farmers market', 'brunch', 'food', 'outdoors', 'local', 'fresh', 'community']
+        date: createFutureDate(9),
     },
     {
         title: "International Potluck",
         description: "Share dishes from your culture and learn about different cuisines in a friendly potluck setting.",
         categories: ['food', 'social', 'education'] as EventCategory[],
         location: { lat: 37.7549, lng: -122.4394, neighborhood: 'Castro' },
-        keywords: ['potluck', 'international', 'food', 'culture', 'social', 'cuisine', 'sharing']
+        date: createFutureDate(7),
     },
 
     // Music + Various overlaps
@@ -139,21 +148,21 @@ const meetupEvents = [
         description: "Showcase your musical talents or just enjoy live music while networking with fellow musicians.",
         categories: ['music', 'social', 'creative'] as EventCategory[],
         location: { lat: 37.7849, lng: -122.4594, neighborhood: 'Marina' },
-        keywords: ['open mic', 'music', 'networking', 'social', 'live music', 'talents', 'musicians']
+        date: createFutureDate(2),
     },
     {
         title: "Music Production Workshop",
         description: "Learn music production techniques and collaborate on projects with other producers.",
         categories: ['music', 'technology', 'creative'] as EventCategory[],
         location: { lat: 37.7549, lng: -122.4794, neighborhood: 'Richmond' },
-        keywords: ['music production', 'workshop', 'technology', 'creative', 'producers', 'collaboration']
+        date: createFutureDate(8),
     },
     {
         title: "Concert Meetup Group",
         description: "Attend concerts together and discuss music. Great way to discover new artists and make friends.",
         categories: ['music', 'social'] as EventCategory[],
         location: { lat: 37.7749, lng: -122.4894, neighborhood: 'Sunset' },
-        keywords: ['concert', 'music', 'social', 'artists', 'discovery', 'friends', 'discussion']
+        date: createFutureDate(10),
     },
 
     // Outdoors + Various overlaps
@@ -162,21 +171,21 @@ const meetupEvents = [
         description: "Help clean up our beaches while enjoying a community picnic. Environmental awareness meets social fun.",
         categories: ['outdoors', 'social', 'other'] as EventCategory[],
         location: { lat: 37.7849, lng: -122.4994, neighborhood: 'Golden Gate Park' },
-        keywords: ['beach cleanup', 'picnic', 'outdoors', 'environmental', 'community', 'volunteer', 'social']
+        date: createFutureDate(11),
     },
     {
         title: "Bike Ride & Coffee Stop",
         description: "Scenic bike ride through the city with coffee breaks. Perfect for cyclists and coffee lovers.",
         categories: ['outdoors', 'fitness', 'food'] as EventCategory[],
         location: { lat: 37.7649, lng: -122.4694, neighborhood: 'Pacific Heights' },
-        keywords: ['bike ride', 'cycling', 'coffee', 'outdoors', 'fitness', 'scenic', 'city']
+        date: createFutureDate(3),
     },
     {
         title: "Nature Photography Hike",
         description: "Capture stunning nature photos while hiking beautiful trails. Learn photography and enjoy the outdoors.",
         categories: ['outdoors', 'creative', 'fitness'] as EventCategory[],
         location: { lat: 37.7749, lng: -122.4194, neighborhood: 'Downtown' },
-        keywords: ['nature', 'photography', 'hiking', 'outdoors', 'creative', 'trails', 'learning']
+        date: createFutureDate(12),
     },
 
     // Business + Various overlaps
@@ -185,170 +194,176 @@ const meetupEvents = [
         description: "Weekly coffee meetup for entrepreneurs to share ideas, challenges, and opportunities.",
         categories: ['business', 'social', 'food'] as EventCategory[],
         location: { lat: 37.7849, lng: -122.4094, neighborhood: 'North Beach' },
-        keywords: ['entrepreneur', 'coffee', 'business', 'social', 'ideas', 'challenges', 'weekly']
+        date: createFutureDate(1),
     },
     {
         title: "Career Development Workshop",
         description: "Learn career advancement strategies and network with professionals in your field.",
         categories: ['business', 'education', 'social'] as EventCategory[],
         location: { lat: 37.7649, lng: -122.4294, neighborhood: 'Mission District' },
-        keywords: ['career development', 'workshop', 'business', 'education', 'networking', 'professionals', 'advancement']
+        date: createFutureDate(13),
     },
     {
         title: "Startup Pitch Practice",
         description: "Practice your startup pitch and get feedback from fellow entrepreneurs and investors.",
         categories: ['business', 'technology', 'education'] as EventCategory[],
         location: { lat: 37.7749, lng: -122.4494, neighborhood: 'Hayes Valley' },
-        keywords: ['startup pitch', 'practice', 'business', 'technology', 'feedback', 'entrepreneurs', 'investors']
+        date: createFutureDate(14),
     },
 
-    // More mixed category events
+    // Additional events for variety
     {
-        title: "Board Game Night & Pizza",
-        description: "Play board games, enjoy pizza, and make new friends. All games and skill levels welcome!",
+        title: "Board Games & Pizza Night",
+        description: "Play board games while enjoying pizza with friends. Casual, fun atmosphere for all ages.",
         categories: ['social', 'food'] as EventCategory[],
-        location: { lat: 37.7549, lng: -122.4394, neighborhood: 'Castro' },
-        keywords: ['board games', 'pizza', 'social', 'friends', 'games', 'casual', 'fun']
+        location: { lat: 37.7849, lng: -122.4594, neighborhood: 'Marina' },
+        date: createFutureDate(4),
     },
     {
         title: "Karaoke & Drinks",
-        description: "Sing your heart out at our karaoke night! Great for music lovers and social butterflies.",
-        categories: ['music', 'social', 'food'] as EventCategory[],
-        location: { lat: 37.7849, lng: -122.4594, neighborhood: 'Marina' },
-        keywords: ['karaoke', 'music', 'drinks', 'social', 'singing', 'fun', 'entertainment']
+        description: "Sing your heart out at our karaoke night! Great for music lovers and those who love to have fun.",
+        categories: ['music', 'social'] as EventCategory[],
+        location: { lat: 37.7549, lng: -122.4394, neighborhood: 'Castro' },
+        date: createFutureDate(5),
     },
     {
         title: "Trivia Night & Beer",
-        description: "Test your knowledge in our weekly trivia night while enjoying craft beers and good company.",
+        description: "Test your knowledge with trivia questions while enjoying craft beer. Weekly competition with prizes.",
         categories: ['social', 'food'] as EventCategory[],
-        location: { lat: 37.7649, lng: -122.4294, neighborhood: 'Mission District' },
-        keywords: ['trivia', 'beer', 'social', 'knowledge', 'weekly', 'craft beer', 'competition']
+        location: { lat: 37.7749, lng: -122.4894, neighborhood: 'Sunset' },
+        date: createFutureDate(6),
     },
     {
         title: "Speed Dating & Coffee",
-        description: "Meet new people in our speed dating event. Coffee and conversation to break the ice.",
+        description: "Meet new people in a structured speed dating format. Coffee and conversation in a relaxed setting.",
         categories: ['social', 'food'] as EventCategory[],
-        location: { lat: 37.7749, lng: -122.4494, neighborhood: 'Hayes Valley' },
-        keywords: ['speed dating', 'coffee', 'social', 'dating', 'conversation', 'meeting people']
+        location: { lat: 37.7849, lng: -122.4094, neighborhood: 'North Beach' },
+        date: createFutureDate(7),
     },
     {
         title: "Book Club & Wine",
-        description: "Discuss interesting books over wine in our monthly book club. All genres welcome!",
-        categories: ['social', 'food'] as EventCategory[],
-        location: { lat: 37.7549, lng: -122.4394, neighborhood: 'Castro' },
-        keywords: ['book club', 'wine', 'social', 'reading', 'discussion', 'monthly', 'literature']
+        description: "Discuss books over wine with fellow literature enthusiasts. Monthly meetings with great conversation.",
+        categories: ['social', 'food', 'education'] as EventCategory[],
+        location: { lat: 37.7649, lng: -122.4294, neighborhood: 'Mission District' },
+        date: createFutureDate(8),
     },
     {
         title: "Dance Night & Cocktails",
-        description: "Dance the night away with great music and cocktails in a fun atmosphere.",
-        categories: ['music', 'social', 'food'] as EventCategory[],
-        location: { lat: 37.7849, lng: -122.4594, neighborhood: 'Marina' },
-        keywords: ['dance', 'music', 'cocktails', 'social', 'nightlife', 'fun', 'atmosphere']
+        description: "Dance the night away with cocktails and great music. Perfect for nightlife enthusiasts.",
+        categories: ['music', 'social'] as EventCategory[],
+        location: { lat: 37.7549, lng: -122.4794, neighborhood: 'Richmond' },
+        date: createFutureDate(9),
     },
     {
-        title: "Outdoor Movie Night & Snacks",
-        description: "Watch movies under the stars with popcorn and snacks provided.",
-        categories: ['social', 'creative', 'food'] as EventCategory[],
-        location: { lat: 37.7549, lng: -122.4794, neighborhood: 'Richmond' },
-        keywords: ['outdoor movies', 'snacks', 'social', 'creative', 'popcorn', 'stars', 'entertainment']
+        title: "Outdoor Movie Night",
+        description: "Watch movies under the stars with snacks and good company. Bring blankets and enjoy the show.",
+        categories: ['social', 'creative'] as EventCategory[],
+        location: { lat: 37.7849, lng: -122.4994, neighborhood: 'Golden Gate Park' },
+        date: createFutureDate(10),
     },
     {
         title: "Language Practice & Tea",
-        description: "Practice different languages with native speakers over traditional tea.",
+        description: "Practice languages in a traditional tea ceremony setting. Learn from native speakers.",
         categories: ['education', 'social', 'food'] as EventCategory[],
-        location: { lat: 37.7749, lng: -122.4894, neighborhood: 'Sunset' },
-        keywords: ['language practice', 'tea', 'education', 'social', 'traditional', 'native speakers']
+        location: { lat: 37.7749, lng: -122.4194, neighborhood: 'Downtown' },
+        date: createFutureDate(11),
     },
     {
         title: "Rock Climbing & Beer",
-        description: "Indoor rock climbing session followed by beers and climbing stories.",
+        description: "Indoor rock climbing followed by beer and stories. Great for fitness enthusiasts and adventure seekers.",
         categories: ['fitness', 'social', 'food'] as EventCategory[],
-        location: { lat: 37.7849, lng: -122.4994, neighborhood: 'Golden Gate Park' },
-        keywords: ['rock climbing', 'beer', 'fitness', 'social', 'indoor', 'stories', 'adventure']
+        location: { lat: 37.7649, lng: -122.4694, neighborhood: 'Pacific Heights' },
+        date: createFutureDate(12),
     },
     {
         title: "Art Workshop & Wine",
-        description: "Create art together in a guided workshop while enjoying wine and conversation.",
+        description: "Guided art workshop with wine and conversation. Perfect for creative minds and wine lovers.",
         categories: ['creative', 'social', 'food'] as EventCategory[],
-        location: { lat: 37.7649, lng: -122.4694, neighborhood: 'Pacific Heights' },
-        keywords: ['art workshop', 'wine', 'creative', 'social', 'guided', 'conversation', 'painting']
+        location: { lat: 37.7849, lng: -122.4594, neighborhood: 'Marina' },
+        date: createFutureDate(13),
     },
     {
         title: "Business Lunch & Networking",
-        description: "Professional networking lunch for business professionals and entrepreneurs.",
+        description: "Professional networking lunch for entrepreneurs and business professionals.",
         categories: ['business', 'social', 'food'] as EventCategory[],
-        location: { lat: 37.7749, lng: -122.4194, neighborhood: 'Downtown' },
-        keywords: ['business lunch', 'networking', 'professional', 'social', 'entrepreneurs', 'lunch']
+        location: { lat: 37.7749, lng: -122.4494, neighborhood: 'Hayes Valley' },
+        date: createFutureDate(14),
     },
     {
         title: "Music Theory Class & Coffee",
-        description: "Learn music theory basics while enjoying coffee with fellow music enthusiasts.",
-        categories: ['music', 'education', 'food'] as EventCategory[],
-        location: { lat: 37.7849, lng: -122.4094, neighborhood: 'North Beach' },
-        keywords: ['music theory', 'class', 'coffee', 'education', 'music', 'basics', 'enthusiasts']
+        description: "Learn music theory basics over coffee. Great for music enthusiasts and beginners.",
+        categories: ['education', 'music', 'food'] as EventCategory[],
+        location: { lat: 37.7549, lng: -122.4394, neighborhood: 'Castro' },
+        date: createFutureDate(15),
     },
     {
-        title: "Hiking & Photography",
-        description: "Scenic hike with photography tips and techniques for nature photography.",
+        title: "Hiking & Photography Tips",
+        description: "Scenic hiking with photography tips and guidance. Learn from experienced photographers.",
         categories: ['outdoors', 'creative', 'fitness'] as EventCategory[],
-        location: { lat: 37.7649, lng: -122.4294, neighborhood: 'Mission District' },
-        keywords: ['hiking', 'photography', 'outdoors', 'creative', 'scenic', 'tips', 'nature']
+        location: { lat: 37.7649, lng: -122.4694, neighborhood: 'Pacific Heights' },
+        date: createFutureDate(16),
     },
     {
         title: "Cooking Class & Wine Pairing",
-        description: "Learn to cook gourmet dishes with expert wine pairing guidance.",
+        description: "Expert cooking class with wine pairing guidance. Gourmet experience for food and wine lovers.",
         categories: ['food', 'education', 'social'] as EventCategory[],
-        location: { lat: 37.7749, lng: -122.4494, neighborhood: 'Hayes Valley' },
-        keywords: ['cooking class', 'wine pairing', 'food', 'education', 'gourmet', 'expert', 'guidance']
+        location: { lat: 37.7849, lng: -122.4594, neighborhood: 'Marina' },
+        date: createFutureDate(17),
     },
     {
         title: "Tech Startup Meetup",
-        description: "Connect with fellow tech startup founders and share experiences and advice.",
+        description: "Share startup experiences and advice with fellow tech entrepreneurs.",
         categories: ['technology', 'business', 'social'] as EventCategory[],
-        location: { lat: 37.7549, lng: -122.4394, neighborhood: 'Castro' },
-        keywords: ['tech startup', 'meetup', 'technology', 'business', 'founders', 'experiences', 'advice']
+        location: { lat: 37.7749, lng: -122.4494, neighborhood: 'Hayes Valley' },
+        date: createFutureDate(18),
     },
     {
         title: "Fitness Challenge & Smoothies",
-        description: "Group fitness challenge followed by healthy smoothies and celebration.",
+        description: "Group fitness challenge followed by healthy smoothies. Celebrate achievements together.",
         categories: ['fitness', 'social', 'food'] as EventCategory[],
-        location: { lat: 37.7849, lng: -122.4594, neighborhood: 'Marina' },
-        keywords: ['fitness challenge', 'smoothies', 'fitness', 'social', 'healthy', 'group', 'celebration']
+        location: { lat: 37.7549, lng: -122.4794, neighborhood: 'Richmond' },
+        date: createFutureDate(19),
     },
     {
         title: "Creative Writing Workshop & Tea",
-        description: "Improve your writing skills in a supportive workshop while enjoying tea.",
+        description: "Supportive creative writing workshop with tea. Share stories and get feedback.",
         categories: ['creative', 'education', 'food'] as EventCategory[],
-        location: { lat: 37.7549, lng: -122.4794, neighborhood: 'Richmond' },
-        keywords: ['creative writing', 'workshop', 'tea', 'creative', 'education', 'writing', 'supportive']
+        location: { lat: 37.7649, lng: -122.4294, neighborhood: 'Mission District' },
+        date: createFutureDate(20),
     },
     {
-        title: "Community Garden Day & Potluck",
-        description: "Work in the community garden together, then share a potluck lunch.",
+        title: "Community Garden & Potluck",
+        description: "Work in the community garden and share lunch. Connect with nature and neighbors.",
         categories: ['outdoors', 'social', 'food'] as EventCategory[],
         location: { lat: 37.7749, lng: -122.4894, neighborhood: 'Sunset' },
-        keywords: ['community garden', 'potluck', 'outdoors', 'social', 'gardening', 'lunch', 'community']
+        date: createFutureDate(21),
     },
     {
         title: "Jazz Night & Cocktails",
-        description: "Enjoy live jazz music while sipping craft cocktails in a sophisticated atmosphere.",
-        categories: ['music', 'social', 'food'] as EventCategory[],
-        location: { lat: 37.7849, lng: -122.4994, neighborhood: 'Golden Gate Park' },
-        keywords: ['jazz', 'cocktails', 'music', 'social', 'live music', 'sophisticated', 'atmosphere']
-    }
+        description: "Sophisticated jazz music with cocktails. Perfect for music lovers and cocktail enthusiasts.",
+        categories: ['music', 'social'] as EventCategory[],
+        location: { lat: 37.7849, lng: -122.4594, neighborhood: 'Marina' },
+        date: createFutureDate(22),
+    },
 ];
 
 // Main seeding function
 async function seedEvents() {
     try {
+        console.log('Starting event seeding...');
+
         // Delete all existing events
+        console.log('Clearing existing events...');
         await db.delete(event);
 
         // Insert new events
+        console.log('Inserting new events...');
         await db.insert(event).values(meetupEvents);
 
+        console.log('✅ Successfully seeded events!');
         process.exit(0);
     } catch (error) {
+        console.error('Error seeding events:', error);
         process.exit(1);
     }
 }

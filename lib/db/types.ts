@@ -1,6 +1,13 @@
 // TypeScript types for our database schema
 import { InferInsertModel, InferSelectModel } from 'drizzle-orm';
-import { event, eventInteraction, eventKeyword, user, userEventRecommendation, userInterest, userProfile } from './schema';
+import { event, message, user } from './schema';
+
+// Import Zod types for runtime validation
+import type {
+    Event as ZodEvent,
+    EventCategory as ZodEventCategory,
+    Location as ZodLocation
+} from '../schemas';
 
 // Base types from our schema
 export type Event = {
@@ -18,11 +25,10 @@ export type Event = {
 };
 
 export type EventInsert = InferInsertModel<typeof event>;
-export type UserProfile = InferSelectModel<typeof userProfile>;
-export type UserProfileInsert = InferInsertModel<typeof userProfile>;
-export type EventInteraction = InferSelectModel<typeof eventInteraction>;
-export type EventInteractionInsert = InferInsertModel<typeof eventInteraction>;
+
 export type User = InferSelectModel<typeof user>;
+export type Message = InferSelectModel<typeof message>;
+export type MessageInsert = InferInsertModel<typeof message>;
 
 // Custom types for better type safety
 export type Location = {
@@ -48,52 +54,14 @@ export type EventCategory =
     | "business"
     | "other";
 
-export type InteractionStatus = "interested" | "going" | "not_interested";
-export type InteractionSource = "chat" | "browse" | "external";
+
 
 // Helper types for API responses
 export type EventWithInteractions = Event & {
-    userInteraction?: EventInteraction;
     host?: User;
 };
 
-export type UserProfileWithUser = UserProfile & {
-    user: User;
-};
-
-// Chat Analysis Types
-export type UserInterest = InferSelectModel<typeof userInterest>;
-export type UserInterestInsert = InferInsertModel<typeof userInterest>;
-export type EventKeyword = InferSelectModel<typeof eventKeyword>;
-export type EventKeywordInsert = InferInsertModel<typeof eventKeyword>;
-export type UserEventRecommendation = InferSelectModel<typeof userEventRecommendation>;
-export type UserEventRecommendationInsert = InferInsertModel<typeof userEventRecommendation>;
-
-// Interest extraction result type
-export interface InterestExtractionResult {
-    interests: Array<{
-        keyword: string;
-        confidence_score: number; // 0-1
-        specificity_score: number; // 0-1
-    }>;
-    has_interests: boolean;
-}
-
-// Recommendation request and result types
-export interface RecommendationRequest {
-    userId: string;
-    limit?: number; // default 3
-    exclude_shown?: boolean; // default true
-}
-
-export interface RecommendationResult {
-    events: Array<{
-        event_id: string;
-        title: string;
-        description: string;
-        score: number;
-        match_reasons: string[];
-    }>;
-    total_available: number;
-    message: string;
-} 
+// Zod-compatible types for runtime validation
+export type ZodValidatedEvent = ZodEvent;
+export type ZodValidatedEventCategory = ZodEventCategory;
+export type ZodValidatedLocation = ZodLocation;

@@ -1,0 +1,133 @@
+# Chat Summarization System Specification
+
+## Overview
+A system that automatically summarizes user chat conversations to build comprehensive user interest profiles for AI-powered event matching. The system processes unsummarized messages and generates dense, AI-optimized interest summaries that can be embedded for semantic matching.
+
+## Core Components
+
+### 1. Database Schema Changes
+
+#### User Table Additions
+```sql
+-- Add to existing user table
+userInterestSummary: text('user_interest_summary').default('').notNull()
+```
+
+#### Message Table Additions
+```sql
+-- Add to existing message table
+isSummarized: boolean('is_summarized').default(false).notNull()
+```
+
+### 2. User Interest Summary Structure
+The `userInterestSummary` field contains a dense, AI-optimized paragraph that includes:
+- **Interests**: Hobbies, activities, topics they enjoy
+- **Skill Levels**: Beginner, intermediate, expert in their interests
+- **Dislikes/Aversions**: Things they avoid or don't enjoy
+- **Location Preferences**: Geographic areas they prefer
+- **Availability Patterns**: When they're typically free
+- **Demographic Information**: Age group, lifestyle factors
+
+**Format**: Single text field optimized for AI embedding generation, not human readability.
+
+### 3. Summarization Triggers
+
+#### Debug Trigger (Temporary)
+- **Location**: Chat screen with a debug button
+- **Behavior**: Manual trigger for testing and development
+- **Access**: Developer/admin only
+
+#### Automatic Trigger
+- **Frequency**: After every 10 new messages from a user
+- **Scope**: Processes all unsummarized messages for that user
+- **Background**: Runs asynchronously without blocking the UI
+
+### 4. Summarization Process
+
+#### Input Processing
+1. Query all messages for user where `isSummarized = false`
+2. Order by `createdAt` timestamp (oldest first)
+3. Include both user and assistant messages for context
+
+#### AI Processing
+- **Model**: GPT-4o-mini (same as chat system)
+- **System Prompt**: Generate dense, factual summary optimized for embedding
+- **Output**: Single paragraph of interest facts
+- **Error Handling**: Graceful failure with retry logic
+
+#### Database Updates
+1. Update `user.userInterestSummary` with new summary
+2. Mark all processed messages with `isSummarized = true`
+3. Handle database transaction rollback on failure
+
+### 5. Technical Implementation
+
+#### API Endpoint
+```
+POST /api/chat/summarize
+- Requires authentication
+- Triggers summarization for current user
+- Returns success/failure status
+```
+
+#### Background Processing
+- Implement as serverless function or background job
+- Process users with >=10 unsummarized messages
+- Handle rate limiting and error recovery
+
+#### Error Handling
+- **Retry Logic**: 3 attempts with exponential backoff
+- **Graceful Degradation**: Continue chat functionality if summarization fails
+- **Logging**: Track failures for debugging
+
+### 6. Integration Points
+
+#### Chat System
+- Add debug button to chat interface (temporary)
+- Monitor message count for automatic triggers
+- Display loading state during manual summarization
+
+#### Database Migrations
+- Add `isSummarized` column to message table
+- Add `userInterestSummary` column to user table
+- Set default values for existing data
+
+### 7. Future Considerations
+
+#### Event Recommendation System
+- Generate embeddings from `userInterestSummary`
+- Use for semantic matching with event descriptions
+- Implement similarity scoring and filtering
+
+#### Performance Optimization
+- Batch processing for high-volume users
+- Caching of recent summaries
+- Incremental summarization for efficiency
+
+#### Privacy & Data Management
+- Data retention policies
+- User data export/deletion
+- Compliance with privacy regulations
+
+## Implementation Priority
+
+### Phase 1: Core System
+1. Database schema updates
+2. Basic summarization API endpoint
+3. Debug button in chat interface
+4. Automatic trigger after 10 messages
+
+### Phase 2: Integration
+1. Embedding generation from summaries
+2. Event recommendation system
+3. Performance optimizations
+
+### Phase 3: Polish
+1. Error handling improvements
+2. Monitoring and analytics
+
+## Success Metrics
+- **Accuracy**: Summaries capture user interests correctly
+- **Performance**: Summarization completes within 30 seconds
+- **Reliability**: 95%+ success rate for summarization jobs
+- **User Experience**: No disruption to chat functionality

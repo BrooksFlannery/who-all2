@@ -1,6 +1,8 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { event } from "@/lib/db/schema";
+import { eventsResponseSchema } from "@/lib/schemas";
+import { validateData } from "@/lib/validation";
 
 /**
  * GET endpoint for retrieving all available events
@@ -37,12 +39,36 @@ export async function GET(req: Request) {
             .from(event)
             .orderBy(event.createdAt);
 
-        // Step 4: Return the events as JSON
+        // Step 4: Transform and validate the response
+        const transformedEvents = events.map(evt => ({
+            id: evt.id,
+            title: evt.title,
+            date: evt.date.toISOString(),
+            location: evt.location,
+            description: evt.description,
+            categories: evt.categories,
+            hostId: evt.hostId,
+            createdAt: evt.createdAt.toISOString(),
+            updatedAt: evt.updatedAt.toISOString(),
+            attendeesCount: evt.attendeesCount,
+            interestedCount: evt.interestedCount,
+        }));
+
+        const responseData = { events: transformedEvents };
+        const validation = validateData(eventsResponseSchema, responseData);
+
+        if (!validation.success) {
+            console.error('Response validation failed:', validation.errors);
+            return new Response("Internal server error", { status: 500 });
+        }
+
+        // Step 5: Return the events as JSON
         // The frontend can use this data to display event listings
-        return Response.json({ events });
+        return Response.json(validation.data);
     } catch (error) {
-        // Step 5: Handle database errors gracefully
+        // Step 6: Handle database errors gracefully
         // Return a generic error message rather than exposing internal details
+        console.error('Error fetching events:', error);
         return new Response("Error fetching events", { status: 500 });
     }
 } 

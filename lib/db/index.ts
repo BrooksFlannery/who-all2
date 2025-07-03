@@ -1,4 +1,5 @@
 import { drizzle } from "drizzle-orm/neon-http";
+import { validateEnv } from "../validation";
 
 function isServer() {
     // window is undefined in Node.js
@@ -12,8 +13,9 @@ if (isServer()) {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { neon } = require("@neondatabase/serverless");
 
-    const connectionString =
-        process.env.EXPO_PUBLIC_DATABASE_URL || process.env.DATABASE_URL || "";
+    // Validate environment variables
+    const env = validateEnv();
+    const connectionString = env.DATABASE_URL;
 
     if (!connectionString) {
         console.warn(

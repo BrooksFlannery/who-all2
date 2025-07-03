@@ -1,38 +1,74 @@
-import { EventCard } from '@/components/EventCard';
 import { ThemedText } from '@/components/ThemedText';
 import { useChat } from '@/hooks/useChat';
-import { Event } from '@/lib/db/types';
-import React from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function ChatScreen() {
-  const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat();
+  const { messages, input, handleInputChange, handleSubmit, isLoading, loadMessageHistory } = useChat();
+  const [isSummarizing, setIsSummarizing] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+
+  // Load message history when component mounts (only once)
+  useEffect(() => {
+    const loadHistory = async () => {
+      console.log('📚 Loading chat history...');
+      setIsLoadingHistory(true);
+      try {
+        await loadMessageHistory();
+        console.log('✅ Chat history loaded successfully');
+      } catch (error) {
+        console.error('❌ Failed to load chat history:', error);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    loadHistory();
+  }, []); // Empty dependency array - only run once on mount
 
   // Wrapper function to handle React Native TextInput changes
   const handleTextChange = (text: string) => {
     handleInputChange({ target: { value: text } } as any);
   };
 
-  // Handle event card press
-  const handleEventPress = (event: Event) => {
-    // TODO: Navigate to event details or handle event interaction
-    console.log('Event pressed:', event.title);
-  };
+  // Function to trigger manual summarization (debug feature)
+  const handleSummarize = useCallback(async () => {
+    console.log('🔘 Summarize button clicked');
+    setIsSummarizing(true);
+    try {
+      console.log('📡 Making request to /api/chat/summarize...');
+      const response = await fetch('/api/chat/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('📥 Response received, status:', response.status);
+      const result = await response.json();
+      console.log('📋 Response data:', result);
+
+      if (result.success) {
+        console.log('✅ Summarization successful');
+        Alert.alert(
+          'Summarization Complete',
+          `Processed ${result.messageCount} messages. Summary length: ${result.summaryLength} characters.`
+        );
+      } else {
+        console.log('❌ Summarization failed:', result);
+        Alert.alert('Error', 'Failed to summarize chat messages.');
+      }
+    } catch (error) {
+      console.error('💥 Summarization request failed:', error);
+      Alert.alert('Error', 'Failed to connect to summarization service.');
+    } finally {
+      console.log('🏁 Summarization process finished');
+      setIsSummarizing(false);
+    }
+  }, []);
 
   // Render each message in the chat
-  const renderMessage = ({ item }: { item: any }) => {
-    console.log('=== RENDER MESSAGE START ===');
-    console.log('Message ID:', item.id);
-    console.log('Message role:', item.role);
-    console.log('Message type:', item.type);
-    console.log('Message content:', item.content);
-    console.log('Has events:', !!item.events);
-    console.log('Events length:', item.events?.length || 0);
-    console.log('Events data:', item.events ? item.events.map((e: any) => ({ id: e.id, title: e.title })) : null);
-    console.log('Condition check - item.type === "event_cards":', item.type === 'event_cards');
-    console.log('Condition check - item.events && item.events.length > 0:', item.events && item.events.length > 0);
-    console.log('Full condition result:', item.type === 'event_cards' && item.events && item.events.length > 0);
-
+  const renderMessage = useCallback(({ item }: { item: any }) => {
     return (
       <View style={[
         styles.messageContainer,
@@ -44,54 +80,37 @@ export default function ChatScreen() {
         ]}>
           {item.content}
         </ThemedText>
-
-        {/* Render event cards for messages with type 'event_cards' and events */}
-        {(() => {
-          const shouldRenderEvents = item.type === 'event_cards' && item.events && item.events.length > 0;
-          console.log('=== EVENT RENDERING CONDITION ===');
-          console.log('shouldRenderEvents:', shouldRenderEvents);
-
-          if (shouldRenderEvents) {
-            console.log('RENDERING EVENT CARDS');
-            console.log('Number of events to render:', item.events.length);
-            return (
-              <View style={styles.eventsContainer}>
-                {item.events.map((event: Event, index: number) => {
-                  console.log(`Rendering event ${index + 1}:`, event.title);
-                  console.log('Event data:', JSON.stringify(event, null, 2));
-
-                  // Validate event data before rendering
-                  if (!event || !event.id || !event.title) {
-                    console.warn('Invalid event data:', event);
-                    return null;
-                  }
-
-                  console.log('Event validation passed, creating EventCard component');
-                  return (
-                    <EventCard
-                      key={event.id}
-                      event={event}
-                      onPress={() => handleEventPress(event)}
-                      compact={true}
-                    />
-                  );
-                }).filter(Boolean)}
-              </View>
-            );
-          } else {
-            console.log('NOT RENDERING EVENT CARDS - condition not met');
-            return null;
-          }
-        })()}
       </View>
     );
-  };
+  }, []);
+
+  // Show loading state while history is being loaded
+  if (isLoadingHistory) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ThemedText style={styles.loadingText}>Loading chat history...</ThemedText>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      {/* Debug Button - Temporary for development */}
+      <View style={styles.debugContainer}>
+        <TouchableOpacity
+          style={[styles.debugButton, isSummarizing && styles.debugButtonDisabled]}
+          onPress={handleSummarize}
+          disabled={isSummarizing}
+        >
+          <ThemedText style={styles.debugButtonText}>
+            {isSummarizing ? 'Summarizing...' : 'Debug: Summarize Chat'}
+          </ThemedText>
+        </TouchableOpacity>
+      </View>
+
       {/* Messages List */}
       <FlatList
         data={messages}
@@ -131,6 +150,27 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  debugContainer: {
+    padding: 8,
+    backgroundColor: '#f0f0f0',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+  },
+  debugButton: {
+    backgroundColor: '#FF9500',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    alignSelf: 'center',
+  },
+  debugButtonDisabled: {
+    backgroundColor: '#C7C7CC',
+  },
+  debugButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
   messagesList: {
     flex: 1,
   },
@@ -161,10 +201,6 @@ const styles = StyleSheet.create({
   },
   assistantMessageText: {
     color: '#000000',
-  },
-  eventsContainer: {
-    marginTop: 12,
-    gap: 12,
   },
   inputContainer: {
     flexDirection: 'row',
@@ -198,7 +234,17 @@ const styles = StyleSheet.create({
   },
   sendButtonText: {
     color: '#FFFFFF',
-    fontWeight: '600',
     fontSize: 16,
+    fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#000000',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
