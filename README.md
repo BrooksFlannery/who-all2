@@ -10,6 +10,7 @@ Who-All is an intelligent event discovery platform that uses conversational AI t
 
 - **Conversational Interest Discovery**: Chat with an AI assistant that naturally extracts your interests through friendly conversation
 - **Semantic Event Matching**: Advanced embedding-based matching using OpenAI's text-embedding-3-small model
+- **Personalized Event Recommendations**: AI-powered event suggestions based on your chat history and interests
 - **Automatic Event Generation**: System creates events based on interest clusters and public NYC locations
 - **Privacy-First Design**: Your chat history and interests are private, with controlled visibility of other attendees
 

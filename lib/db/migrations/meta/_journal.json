@@ -22,6 +22,13 @@
       "when": 1751561357068,
       "tag": "0002_deep_mongu",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1751563804661,
+      "tag": "0003_chilly_viper",
+      "breakpoints": true
     }
   ]
 }

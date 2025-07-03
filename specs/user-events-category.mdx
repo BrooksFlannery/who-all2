@@ -1,0 +1,306 @@
+# Recommended Events Category Feature Specification
+
+## Overview
+Add a "Recommended" category to the events page that displays personalized event recommendations for users. This category will be the first option in the category filter and will show up to 15 recommended events in order of relevance.
+
+## Feature Requirements
+
+### 1. Database Schema Changes
+
+#### User Table Addition
+Add a new field to the `user` table to cache recommended event IDs:
+
+```sql
+ALTER TABLE "user" ADD COLUMN "recommended_event_ids" text[] DEFAULT '{}';
+```
+
+This field will store an array of event IDs in order of recommendation relevance (most relevant first).
+
+### 2. Backend Implementation
+
+#### Update User Schema
+```typescript
+// lib/db/schema.ts
+export const user = pgTable("user", {
+    // ... existing fields ...
+    recommendedEventIds: text("recommended_event_ids").array().default([]).notNull(),
+});
+```
+
+#### Update Embeddings Function
+Modify `getEventRecommendations` in `lib/embeddings.ts` to:
+1. Return only the top 15 recommendations
+2. Update the user's `recommendedEventIds` field with the results
+3. Return the full event objects for immediate use
+
+```typescript
+export async function getEventRecommendations(userId: string): Promise<Array<{
+    id: string;
+    title: string;
+    description: string;
+    similarity: number;
+}>> {
+    // ... existing logic ...
+    
+    // Limit to top 15 recommendations
+    const topRecommendations = recommendations.slice(0, 15);
+    
+    // Update user's cached recommendations
+    await updateUserRecommendedEvents(userId, topRecommendations.map(r => r.id));
+    
+    return topRecommendations;
+}
+
+async function updateUserRecommendedEvents(userId: string, eventIds: string[]): Promise<void> {
+    if (!db) return;
+    
+    await db.update(user)
+        .set({
+            recommendedEventIds: eventIds,
+            updatedAt: new Date()
+        })
+        .where(eq(user.id, userId));
+}
+```
+
+#### New API Endpoint for Cached Recommendations
+Create `app/api/events/recommended/+api.ts`:
+
+```typescript
+import { auth } from "@/lib/auth";
+import { db } from "@/lib/db";
+import { user, event } from "@/lib/db/schema";
+import { eq, inArray } from "drizzle-orm";
+
+export async function GET(req: Request) {
+    const session = await auth.api.getSession({ headers: req.headers });
+
+    if (!session?.user?.id) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+
+    // Verify database availability
+    if (!db) {
+        return new Response("Database not available", { status: 500 });
+    }
+
+    try {
+        // Get user's cached recommended event IDs
+        const userResult = await db.select({ recommendedEventIds: user.recommendedEventIds })
+            .from(user)
+            .where(eq(user.id, session.user.id))
+            .limit(1);
+
+        const eventIds = userResult[0]?.recommendedEventIds || [];
+        
+        if (eventIds.length === 0) {
+            return Response.json({ events: [] });
+        }
+
+        // Get full event objects for the cached IDs
+        const events = await db.select()
+            .from(event)
+            .where(inArray(event.id, eventIds));
+
+        // Transform events to match the expected format
+        const transformedEvents = events.map(evt => ({
+            id: evt.id,
+            title: evt.title,
+            date: evt.date.toISOString(),
+            location: evt.location,
+            description: evt.description,
+            categories: evt.categories,
+            hostId: evt.hostId,
+            createdAt: evt.createdAt.toISOString(),
+            updatedAt: evt.updatedAt.toISOString(),
+            attendeesCount: evt.attendeesCount,
+            interestedCount: evt.interestedCount,
+        }));
+
+        // Sort events to match the original order in eventIds
+        const sortedEvents = transformedEvents.sort((a, b) => {
+            const aIndex = eventIds.indexOf(a.id);
+            const bIndex = eventIds.indexOf(b.id);
+            return aIndex - bIndex;
+        });
+
+        return Response.json({ events: sortedEvents });
+    } catch (error) {
+        console.error('Error getting cached recommendations:', error);
+        return new Response("Error getting recommendations", { status: 500 });
+    }
+}
+```
+
+**Note:** The original specification used PostgreSQL's `array_position()` function for ordering, but this was changed to JavaScript sorting for better compatibility and reliability.
+
+### 3. Frontend Implementation
+
+#### Update Category List
+Modify `app/(tabs)/index.tsx` to include "Recommended" as the first category:
+
+```typescript
+const categories = ['Recommended', 'All', 'Fitness', 'Social', 'Creative', 'Technology', 'Education', 'Food', 'Music', 'Outdoors', 'Business', 'Other'] as const;
+```
+
+#### Add Recommended Events Loading Logic
+Add state and loading logic for recommended events:
+
+```typescript
+const [recommendedEvents, setRecommendedEvents] = useState<Event[]>([]);
+const [isLoadingRecommended, setIsLoadingRecommended] = useState(false);
+
+// Load recommended events when "Recommended" category is selected
+useEffect(() => {
+    if (selectedCategory === 'Recommended') {
+        loadRecommendedEvents();
+    }
+}, [selectedCategory]);
+
+const loadRecommendedEvents = async () => {
+    setIsLoadingRecommended(true);
+    try {
+        const authHeaders = await getAuthHeaders();
+        const response = await fetch('/api/events/recommended', {
+            headers: authHeaders
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            setRecommendedEvents(data.events || []);
+        } else {
+            console.error('Failed to load recommended events');
+            setRecommendedEvents([]);
+        }
+    } catch (error) {
+        console.error('Error loading recommended events:', error);
+        setRecommendedEvents([]);
+    } finally {
+        setIsLoadingRecommended(false);
+    }
+};
+```
+
+#### Update Event Filtering Logic
+Modify the filtering logic to handle the "Recommended" category:
+
+```typescript
+const filteredEvents = selectedCategory === 'Recommended' 
+    ? recommendedEvents
+    : selectedCategory === 'All'
+    ? events
+    : events.filter(event => event.categories.includes(selectedCategory.toLowerCase() as EventCategory));
+```
+
+#### Update Loading States
+Modify the loading state to handle recommended events:
+
+```typescript
+const isLoading = selectedCategory === 'Recommended' 
+    ? isLoadingRecommended 
+    : isLoading;
+```
+
+### 4. Integration Points
+
+#### Event Comparison Trigger
+When the existing `/api/events/recommendations` endpoint is called (from chat or other parts of the app), it will automatically:
+1. Generate new recommendations
+2. Update the user's `recommendedEventIds` field
+3. Return the recommendations for immediate use
+
+#### No Additional Triggers
+- Chat summarization remains independent of recommendation updates
+- No automatic periodic updates
+- No analytics tracking for event interactions
+- No "Not interested" functionality
+
+### 5. Error Handling
+
+#### Graceful Degradation
+- If user has no interest embedding: show empty recommended list
+- If cached recommendations are invalid: fall back to empty list
+- If API calls fail: show appropriate error states
+- If no recommended events: show empty state with helpful message
+
+#### Loading States
+- Show loading spinner when switching to "Recommended" category
+- Maintain existing loading states for other categories
+
+### 6. Testing Strategy
+
+#### Unit Tests
+- Test `updateUserRecommendedEvents` function
+- Test recommendation limiting to 15 events
+- Test array ordering preservation
+
+#### Integration Tests
+- Test recommended events API endpoint
+- Test frontend category switching
+- Test loading states and error handling
+
+#### Manual Testing
+- Verify "Recommended" appears first in category list
+- Verify recommendations update when event comparison is run
+- Verify empty state when no recommendations available
+
+### 7. Implementation Phases
+
+#### Phase 1: Database Schema
+1. Add `recommendedEventIds` column to user table
+2. Update TypeScript types and schemas
+
+#### Phase 2: Backend Logic
+1. Update `getEventRecommendations` to cache results
+2. Create new `/api/events/recommended` endpoint
+3. Add `updateUserRecommendedEvents` function
+
+#### Phase 3: Frontend Integration
+1. Add "Recommended" to category list
+2. Implement recommended events loading logic
+3. Update filtering and loading states
+
+#### Phase 4: Testing & Polish
+1. Add comprehensive tests
+2. Test error scenarios
+3. Verify UI/UX flow
+
+## Success Criteria
+- "Recommended" category appears first in the category list
+- Users see up to 15 personalized event recommendations
+- Recommendations update automatically when event comparison is run
+- Empty states are handled gracefully
+- Performance remains acceptable with cached recommendations
+
+## Implementation Status
+
+### ✅ Completed Implementation
+This feature has been fully implemented and tested. All phases have been completed successfully:
+
+1. **Database Schema** ✅ - Added `recommendedEventIds` field to user table
+2. **Backend Logic** ✅ - Updated embeddings and created API endpoint
+3. **Frontend Integration** ✅ - Added "Recommended" category and loading logic
+4. **Testing & Polish** ✅ - Comprehensive tests and error handling
+
+### 🔧 Implementation Changes
+During implementation, the following changes were made to the original specification:
+
+1. **SQL Ordering**: Changed from PostgreSQL's `array_position()` function to JavaScript sorting for better compatibility
+2. **Error Handling**: Added database availability checks in the API endpoint
+3. **Event Transformation**: Added proper event transformation to match frontend expectations
+4. **Test Robustness**: Added unique emails and robust cleanup for database tests
+
+### 📁 Files Modified
+- `lib/db/schema.ts` - Added recommendedEventIds field
+- `lib/db/migrations/0003_chilly_viper.sql` - Database migration
+- `lib/embeddings.ts` - Updated getEventRecommendations and added updateUserRecommendedEvents
+- `app/api/events/recommended/+api.ts` - New API endpoint
+- `app/(tabs)/index.tsx` - Frontend integration
+- `tests/test-recommended-events.test.ts` - New test file
+
+### 🧪 Testing
+All tests pass and the feature is ready for production use. The implementation includes:
+- Unit tests for caching functionality
+- Integration tests for API endpoints
+- Frontend loading and error state tests
+- Database cleanup and isolation tests 

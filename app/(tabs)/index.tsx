@@ -5,15 +5,42 @@ import React, { useEffect, useState } from 'react';
 import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // Event categories for filtering
-const categories = ['All', 'Fitness', 'Social', 'Creative', 'Technology', 'Education', 'Food', 'Music', 'Outdoors', 'Business', 'Other'] as const;
+const categories = ['Recommended', 'All', 'Fitness', 'Social', 'Creative', 'Technology', 'Education', 'Food', 'Music', 'Outdoors', 'Business', 'Other'] as const;
 type CategoryFilter = typeof categories[number];
 
 export default function EventsScreen() {
   const { user, signOut } = useAuth();
-  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('All');
+  const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('Recommended');
   const [events, setEvents] = useState<Event[]>([]);
+  const [recommendedEvents, setRecommendedEvents] = useState<Event[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingRecommended, setIsLoadingRecommended] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Load recommended events
+  const loadRecommendedEvents = async () => {
+    setIsLoadingRecommended(true);
+    try {
+      const authHeaders = await getAuthHeaders();
+      const response = await fetch('/api/events/recommended', {
+        headers: authHeaders
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setRecommendedEvents(data.events || []);
+        console.log('Loaded', data.events?.length || 0, 'recommended events');
+      } else {
+        console.error('Failed to load recommended events');
+        setRecommendedEvents([]);
+      }
+    } catch (error) {
+      console.error('Error loading recommended events:', error);
+      setRecommendedEvents([]);
+    } finally {
+      setIsLoadingRecommended(false);
+    }
+  };
 
   // Load events from database
   useEffect(() => {
@@ -55,6 +82,13 @@ export default function EventsScreen() {
     loadEvents();
   }, []);
 
+  // Load recommended events when "Recommended" category is selected
+  useEffect(() => {
+    if (selectedCategory === 'Recommended') {
+      loadRecommendedEvents();
+    }
+  }, [selectedCategory]);
+
   const handleSignOut = async () => {
     try {
       await signOut();
@@ -63,9 +97,11 @@ export default function EventsScreen() {
     }
   };
 
-  const filteredEvents = selectedCategory === 'All'
-    ? events
-    : events.filter(event => event.categories.includes(selectedCategory.toLowerCase() as EventCategory));
+  const filteredEvents = selectedCategory === 'Recommended'
+    ? recommendedEvents
+    : selectedCategory === 'All'
+      ? events
+      : events.filter(event => event.categories.includes(selectedCategory.toLowerCase() as EventCategory));
 
   const formatDate = (date: Date | string) => {
     const eventDate = typeof date === 'string' ? new Date(date) : date;
@@ -156,7 +192,11 @@ export default function EventsScreen() {
     </TouchableOpacity>
   );
 
-  if (isLoading) {
+  const isCurrentlyLoading = selectedCategory === 'Recommended'
+    ? isLoadingRecommended
+    : isLoading;
+
+  if (isCurrentlyLoading) {
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingText}>Loading events...</Text>
@@ -215,13 +255,18 @@ export default function EventsScreen() {
         <View style={styles.emptyState}>
           <Text style={styles.emptyStateEmoji}>🎉</Text>
           <Text style={styles.emptyStateText}>
-            {selectedCategory === 'All'
-              ? 'No events found'
-              : `No ${selectedCategory} events found`
+            {selectedCategory === 'Recommended'
+              ? 'No recommended events found'
+              : selectedCategory === 'All'
+                ? 'No events found'
+                : `No ${selectedCategory} events found`
             }
           </Text>
           <Text style={styles.emptyStateSubtext}>
-            Check back later for new events!
+            {selectedCategory === 'Recommended'
+              ? 'Try chatting with the AI to get personalized recommendations!'
+              : 'Check back later for new events!'
+            }
           </Text>
         </View>
       ) : (
