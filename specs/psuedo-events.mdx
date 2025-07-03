@@ -1,0 +1,396 @@
+# Pseudo-Event Generation Spec
+
+## Overview
+This spec covers the intermediate step in the who-all event generation pipeline: analyzing user interest clusters and generating pseudo-events that can be fed into the Google Places API system.
+
+## Context in Project Flow
+1. **User Interest Analysis** → System analyzes chat data to build interest profiles
+2. **Pseudo-Event Generation** → Creates event concepts based on interest clusters (this spec)
+3. **Google Places API** → Finds real venues matching pseudo-event criteria
+4. **Real Events** → Stored in existing `event` table with venue data
+
+## System Architecture
+
+### Manual Trigger Script
+- **Location**: `scripts/generate-pseudo-events.ts`
+- **Trigger**: Manual execution from IDE/terminal
+- **Frequency**: On-demand only
+- **Output**: Array of PseudoEvent objects ready for Google Places API
+
+### Database Schema Updates
+```typescript
+// Add location to user table (simplified approach)
+export const user = pgTable("user", {
+  // ... existing fields ...
+  location: jsonb("location"), // { lat: number, lng: number } - nullable
+  // ... rest of existing fields ...
+});
+```
+
+**Note**: Using single location field on user table instead of separate user_location table for MVP simplicity.
+
+## Pseudo-Event Interface
+```typescript
+interface PseudoEvent {
+  title: string;                    // e.g. "Rock Climbing Meetup"
+  description: string;              // Event description
+  categories: string[];             // Event categories: ["fitness", "social"]
+  targetLocation: {
+    center: { lat: number; lng: number };
+    radiusMeters: number;           // e.g. 5000 (5km)
+  };
+  venueTypeQuery: string;           // e.g. "rock climbing gym", "coffee shop"
+  estimatedAttendees: number;       // Hard-coded to 20 for MVP
+  clusterUserIds: string[];         // Users in this interest cluster
+  generatedFrom: {
+    centroidUserIds: string[];      // Top 5 users used for generation
+    clusterId: string;              // HDBSCAN cluster identifier
+  };
+}
+```
+
+## Implementation Steps
+
+### 1. User Clustering with HDBSCAN (TypeScript Implementation)
+
+#### 1.1 Prerequisites
+```bash
+npm install hdbscan-ts
+```
+
+**Note**: Using `hdbscan-ts` package which provides native TypeScript implementation of HDBSCAN algorithm. This avoids needing Python services and keeps everything in our TS stack.
+
+#### 1.2 Clustering Process
+```typescript
+import { HDBSCAN } from 'hdbscan-ts';
+
+interface ClusteringParams {
+  minClusterSize: number;    // Target: 20 users per cluster
+  minSamples: number;        // Default: 5
+  metric: 'cosine';          // Distance metric for embeddings
+}
+
+async function clusterUsersByInterests(): Promise<UserCluster[]> {
+  // Step 1: Fetch all users with interest embeddings
+  const users = await db.select().from(user).where(not(isNull(user.interestEmbedding)));
+  
+  // Step 2: Extract embeddings as 2D array
+  const embeddings = users.map(u => JSON.parse(u.interestEmbedding));
+  
+  // Step 3: Run HDBSCAN clustering
+  const clusterer = new HDBSCAN({
+    minClusterSize: 20,
+    minSamples: 5,
+    metric: 'cosine'
+  });
+  
+  const labels = clusterer.fit(embeddings);
+  
+  // Step 4: Group users by cluster labels
+  const clusters: UserCluster[] = [];
+  const clusterMap = new Map<number, string[]>();
+  
+  labels.forEach((label, index) => {
+    if (!clusterMap.has(label)) {
+      clusterMap.set(label, []);
+    }
+    clusterMap.get(label)!.push(users[index].id);
+  });
+  
+  // Step 5: Convert to UserCluster objects
+  clusterMap.forEach((userIds, clusterId) => {
+    clusters.push({
+      id: `cluster_${clusterId}`,
+      userIds,
+      centroid: calculateCentroid(embeddings, userIds, users)
+    });
+  });
+  
+  return clusters;
+}
+```
+
+**⚠️ FUTURE CONSIDERATION**: Current implementation treats unclustered users (label -1) as individual clusters. This will need refinement as user base grows.
+
+### 2. Centroid User Selection
+
+```typescript
+interface UserCluster {
+  id: string;
+  userIds: string[];
+  centroid: number[];  // Average embedding of cluster
+}
+
+function findCentroidUsers(cluster: UserCluster, users: User[], count: number = 5): string[] {
+  // Calculate cosine similarity between each user and cluster centroid
+  const userScores = cluster.userIds.map(userId => {
+    const user = users.find(u => u.id === userId)!;
+    const userEmbedding = JSON.parse(user.interestEmbedding);
+    const similarity = cosineSimilarity(userEmbedding, cluster.centroid);
+    return { userId, similarity };
+  });
+  
+  // Return top 5 most similar users
+  return userScores
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, count)
+    .map(u => u.userId);
+}
+```
+
+### 3. Event Description Generation
+
+```typescript
+async function generateEventDescriptions(centroidUserIds: string[]): Promise<string[]> {
+  // Step 1: Fetch user interest summaries
+  const users = await db.select().from(user).where(inArray(user.id, centroidUserIds));
+  const interestSummaries = users.map(u => u.userInterestSummary).join('\n\n');
+  
+  // Step 2: Generate 5 diverse event descriptions
+  const prompt = `
+Based on these user interest summaries, generate 5 diverse event descriptions that would satisfy all these users:
+
+${interestSummaries}
+
+Generate 5 different event concepts that are as diverse as possible while still appealing to all users. Each event should have:
+- A clear title
+- A detailed description of what the event involves
+- Why it would appeal to this group
+
+Format as numbered list:
+1. [Title] - [Description]
+2. [Title] - [Description]
+...
+`;
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4",
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.8
+  });
+  
+  // Step 3: Parse response into individual descriptions
+  return parseEventDescriptions(response.choices[0].message.content);
+}
+```
+
+### 4. Event Selection via Embedding Comparison
+
+```typescript
+async function selectBestEvent(descriptions: string[], clusterUserIds: string[]): Promise<string> {
+  // Step 1: Embed all event descriptions
+  const eventEmbeddings = await Promise.all(
+    descriptions.map(desc => generateEmbedding(desc))
+  );
+  
+  // Step 2: Get all user embeddings in cluster
+  const users = await db.select().from(user).where(inArray(user.id, clusterUserIds));
+  const userEmbeddings = users.map(u => JSON.parse(u.interestEmbedding));
+  
+  // Step 3: Calculate average similarity for each event
+  const eventScores = eventEmbeddings.map((eventEmbedding, index) => {
+    const similarities = userEmbeddings.map(userEmbedding => 
+      cosineSimilarity(eventEmbedding, userEmbedding)
+    );
+    const avgSimilarity = similarities.reduce((a, b) => a + b, 0) / similarities.length;
+    return { description: descriptions[index], score: avgSimilarity };
+  });
+  
+  // Step 4: Return highest scoring event
+  return eventScores.sort((a, b) => b.score - a.score)[0].description;
+}
+```
+
+### 5. Location Calculation
+
+```typescript
+function calculateClusterLocation(clusterUserIds: string[], users: User[]): { lat: number; lng: number } {
+  const clusterUsers = users.filter(u => clusterUserIds.includes(u.id));
+  
+  // Filter users with location data
+  const usersWithLocation = clusterUsers.filter(u => u.location);
+  
+  if (usersWithLocation.length === 0) {
+    // Default NYC location if no users have location data
+    return { lat: 40.7128, lng: -74.0060 }; // Manhattan
+  }
+  
+  // Calculate average location
+  const totalLat = usersWithLocation.reduce((sum, u) => sum + u.location.lat, 0);
+  const totalLng = usersWithLocation.reduce((sum, u) => sum + u.location.lng, 0);
+  
+  return {
+    lat: totalLat / usersWithLocation.length,
+    lng: totalLng / usersWithLocation.length
+  };
+}
+```
+
+### 6. Venue Type Extraction
+
+```typescript
+async function extractVenueTypes(eventDescriptions: string[]): Promise<string[]> {
+  const prompt = `
+For each of these event descriptions, suggest the most appropriate Google Places venue type:
+
+${eventDescriptions.map((desc, i) => `${i + 1}. ${desc}`).join('\n')}
+
+Respond with just the venue types, one per line, in order:
+1. [venue type]
+2. [venue type]
+...
+`;
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4",
+    messages: [{ role: "user", content: prompt }],
+    temperature: 0.3
+  });
+  
+  return parseVenueTypes(response.choices[0].message.content);
+}
+```
+
+**⚠️ FUTURE CONSIDERATION**: Processing all descriptions in one call will hit token limits as user base grows. Need to implement batching based on token count.
+
+## Main Script Flow
+
+```typescript
+// scripts/generate-pseudo-events.ts
+async function generatePseudoEvents(): Promise<PseudoEvent[]> {
+  console.log('Starting pseudo-event generation...');
+  
+  // Step 1: Cluster users by interest embeddings
+  const clusters = await clusterUsersByInterests();
+  console.log(`Generated ${clusters.length} clusters`);
+  
+  const pseudoEvents: PseudoEvent[] = [];
+  
+  // Step 2: Process each cluster
+  for (const cluster of clusters) {
+    console.log(`Processing cluster ${cluster.id} with ${cluster.userIds.length} users`);
+    
+    // Step 3: Find centroid users
+    const centroidUserIds = findCentroidUsers(cluster, users);
+    
+    // Step 4: Generate event descriptions
+    const descriptions = await generateEventDescriptions(centroidUserIds);
+    
+    // Step 5: Select best event
+    const bestDescription = await selectBestEvent(descriptions, cluster.userIds);
+    
+    // Step 6: Calculate location
+    const location = calculateClusterLocation(cluster.userIds, users);
+    
+    // Step 7: Create pseudo-event (venue type will be extracted later)
+    const pseudoEvent: PseudoEvent = {
+      title: extractTitle(bestDescription),
+      description: bestDescription,
+      categories: extractCategories(bestDescription), // Helper function
+      targetLocation: {
+        center: location,
+        radiusMeters: 5000 // 5km radius
+      },
+      venueTypeQuery: '', // Will be filled in next step
+      estimatedAttendees: 20, // Hard-coded for MVP
+      clusterUserIds: cluster.userIds,
+      generatedFrom: {
+        centroidUserIds,
+        clusterId: cluster.id
+      }
+    };
+    
+    pseudoEvents.push(pseudoEvent);
+  }
+  
+  // Step 8: Extract venue types for all events
+  const descriptions = pseudoEvents.map(pe => pe.description);
+  const venueTypes = await extractVenueTypes(descriptions);
+  
+  // Step 9: Update pseudo-events with venue types
+  pseudoEvents.forEach((pe, index) => {
+    pe.venueTypeQuery = venueTypes[index];
+  });
+  
+  console.log(`Generated ${pseudoEvents.length} pseudo-events`);
+  return pseudoEvents;
+}
+```
+
+## Usage
+
+```bash
+# Run the script
+npm run generate-pseudo-events
+
+# Or directly
+npx tsx scripts/generate-pseudo-events.ts
+```
+
+## Output Format
+The script outputs an array of PseudoEvent objects that can be directly fed into the Google Places API integration:
+
+```typescript
+[
+  {
+    title: "Rock Climbing Meetup",
+    description: "Join fellow climbing enthusiasts for an evening of bouldering...",
+    categories: ["fitness", "social"],
+    targetLocation: { center: { lat: 40.7128, lng: -74.0060 }, radiusMeters: 5000 },
+    venueTypeQuery: "rock climbing gym",
+    estimatedAttendees: 20,
+    clusterUserIds: ["user1", "user2", ...],
+    generatedFrom: { centroidUserIds: ["user1", "user3", ...], clusterId: "cluster_0" }
+  },
+  // ... more events
+]
+```
+
+## Key Implementation Notes
+
+### 1. **TypeScript HDBSCAN**
+- Using `hdbscan-ts` package for native TypeScript implementation
+- No Python service required
+- Supports cosine similarity metric for embeddings
+- Handles varying cluster shapes and sizes automatically
+
+### 2. **User Location Handling**
+- Single `location` JSONB field on user table
+- Simple {lat, lng} format for MVP
+- Default to Manhattan (40.7128, -74.0060) if no location set
+- Can be collected via simple form or device geolocation
+
+### 3. **Clustering Strategy**
+- HDBSCAN finds clusters without knowing number in advance
+- Better than k-means for complex, varying data
+- Handles outliers naturally (label -1)
+- Target 20 users per cluster for optimal event size
+
+### 4. **Event Generation Pipeline**
+- Uses existing user interest embeddings (1536-dim vectors)
+- Cosine similarity for event selection
+- GPT-4 for event description generation
+- Batch processing for venue type extraction
+
+## Future Considerations
+
+### ⚠️ CRITICAL LIMITATIONS TO ADDRESS:
+
+1. **Unclustered Users**: Currently treated as individual clusters. Need proper handling as user base grows.
+
+2. **Token Limits**: Venue type extraction processes all descriptions in one call. Will need batching implementation.
+
+3. **Location Data**: Users without location data use default NYC coordinates. Need proper location collection UI.
+
+4. **Cluster Size**: Hard-coded 20 attendee target. Should be dynamic based on event type and venue capacity.
+
+5. **Event Diversity**: No mechanism to prevent similar events across different clusters.
+
+6. **Performance**: No caching or optimization for repeated runs.
+
+### Recommended Next Steps:
+1. Implement user location collection UI
+2. Add batching for venue type extraction
+3. Implement cluster quality metrics
+4. Add event similarity checking
+5. Optimize for production scale

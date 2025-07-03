@@ -9,6 +9,7 @@ export const user = pgTable("user", {
     userInterestSummary: text('user_interest_summary').default('').notNull(),
     interestEmbedding: text('interest_embedding'), // VECTOR(1536) - will be cast in SQL
     recommendedEventIds: text('recommended_event_ids').array().default([]).notNull(),
+    location: jsonb("location"), // { latitude: number, longitude: number } - nullable
     createdAt: timestamp('created_at').$defaultFn(() => /* @__PURE__ */ new Date()).notNull(),
     updatedAt: timestamp('updated_at').$defaultFn(() => /* @__PURE__ */ new Date()).notNull()
 });

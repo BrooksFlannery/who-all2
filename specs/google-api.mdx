@@ -1,0 +1,302 @@
+# Google Places API Integration Spec for Event Generation
+
+## Overview
+This spec covers the final step in the who-all event generation pipeline: converting pseudo-events (generated from user interest clusters) into real events with actual venues from Google Places API.
+
+## Context in Project Flow
+1. **User Interest Analysis** → System analyzes chat data to build interest profiles
+2. **Pseudo-Event Generation** → Creates event concepts based on interest clusters (not covered here)
+3. **Google Places API** → Finds real venues matching pseudo-event criteria (this spec)
+4. **Real Events** → Stored in existing `event` table with venue data
+
+## Input: Pseudo-Event Interface
+```typescript
+interface PseudoEvent {
+  title: string;                    // e.g. "Rock Climbing Meetup"
+  description: string;              // Event description
+  categories: string[];             // Event categories: ["fitness", "social"]
+  targetLocation: {
+    center: { lat: number; lng: number };
+    radiusMeters: number;           // e.g. 5000 (5km)
+  };
+  venueTypeQuery: string;           // e.g. "rock climbing gym", "coffee shop"
+  estimatedAttendees: number;       // Expected group size
+}
+```
+
+## Database Schema Updates
+### Enhanced Event Table
+```typescript
+export const event = pgTable("event", {
+  // Existing fields...
+  id: uuid("id").defaultRandom().primaryKey(),
+  title: text("title").notNull(),
+  date: timestamp("date", { withTimezone: true }).notNull(),
+  location: jsonb("location").notNull(), // { lat: number, lng: number, neighborhood?: string }
+  description: text("description").notNull(),
+  categories: text("categories").array().notNull(), // Event categories (fitness, social, etc.)
+  
+  // New Google Places fields
+  venue: jsonb("venue"),                    // Google Places venue data
+  venueType: text("venue_type"),            // Google type (gym, restaurant, park)
+  venueRating: integer("venue_rating"),     // Google rating (1-5)
+  venuePriceLevel: integer("venue_price_level"), // Google price level (1-4)
+  
+  // Existing fields...
+  hostId: text("host_id").references(() => user.id),
+  embedding: text("embedding"), // VECTOR(1536)
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  attendeesCount: integer("attendees_count").default(0).notNull(),
+  interestedCount: integer("interested_count").default(0).notNull(),
+});
+```
+
+### User Location (Simplified Approach)
+```typescript
+// Add to existing user table (already implemented in pseudo-events spec)
+export const user = pgTable("user", {
+  // ... existing fields ...
+  location: jsonb("location"), // { lat: number, lng: number } - nullable
+  // ... rest of existing fields ...
+});
+```
+
+**Note**: Using single location field on user table instead of separate user_location table for MVP simplicity. This avoids complexity while meeting requirements.
+
+## Google Places API Integration
+
+### 1. Search Parameters
+```typescript
+interface VenueSearchParams {
+  pseudoEvent: PseudoEvent;
+  maxResults?: number;        // Default: 20
+  maxDetailFetches?: number;  // Default: 10
+  scoreThreshold?: number;    // Default: 0.5 (0-1)
+  apiKey: string;            // From .env GOOGLE_PLACES_API_KEY
+}
+```
+
+### 2. Venue Selection Strategy
+**Nearby Search Approach**
+- Use Google Places Nearby Search API
+- Requires center + radius (matches our pseudo-event targetLocation)
+- Returns up to 20 results ordered by distance
+- Best for our use case since we have specific target areas
+
+**Scoring Algorithm**
+- Score = (normalized distance × 0.5) + (normalized rating × 0.5)
+- Distance score: 1 - (candidate index / total candidates)
+- Rating score: (Google rating / 5)
+- Only venues above scoreThreshold are considered
+
+### 3. Implementation Steps
+
+#### 3.1 Nearby Search Call
+```typescript
+async function searchNearby(params: VenueSearchParams) {
+  const body = {
+    includedTypes: [],  // empty = all types
+    locationRestriction: {
+      circle: {
+        center: params.pseudoEvent.targetLocation.center,
+        radius: params.pseudoEvent.targetLocation.radiusMeters
+      }
+    },
+    maxResultCount: params.maxResults || 20,
+    rankPreference: 'DISTANCE'
+  };
+
+  const res = await axios.post(
+    'https://places.googleapis.com/v1/places:searchNearby',
+    body,
+    {
+      headers: {
+        'X-Goog-Api-Key': params.apiKey,
+        'X-Goog-FieldMask': [
+          'places.place_id',
+          'places.displayName',
+          'places.geometry.location',
+          'places.types'
+        ].join(',')
+      }
+    }
+  );
+  return res.data.places;
+}
+```
+
+#### 3.2 Details + Scoring
+```typescript
+async function getPlaceDetails(placeId: string, apiKey: string) {
+  const res = await axios.get(
+    `https://places.googleapis.com/v1/places/${placeId}`,
+    {
+      headers: {
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': [
+          'openingHours',
+          'rating',
+          'priceLevel'
+        ].join(',')
+      }
+    }
+  );
+  return res.data;
+}
+
+async function findBestVenue(params: VenueSearchParams) {
+  const candidates = await searchNearby(params);
+  let checked = 0;
+
+  for (const candidate of candidates) {
+    if (checked++ >= (params.maxDetailFetches ?? 10)) break;
+
+    const details = await getPlaceDetails(candidate.place_id, params.apiKey);
+    
+    // Score = (normalized distance * 0.5) + (normalized rating * 0.5)
+    const distanceScore = 1 - (checked - 1) / (candidates.length - 1);
+    const ratingScore = (details.rating ?? 0) / 5;
+    const score = 0.5 * distanceScore + 0.5 * ratingScore;
+
+    if (score >= (params.scoreThreshold ?? 0.5)) {
+      return { ...candidate, rating: details.rating, priceLevel: details.priceLevel, score };
+    }
+  }
+
+  return null; // no venue met criteria
+}
+```
+
+### 4. Event Generation Process
+```typescript
+async function generateRealEvent(pseudoEvent: PseudoEvent): Promise<Event | null> {
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  
+  // Step 1: Find best venue
+  const venue = await findBestVenue({
+    pseudoEvent,
+    apiKey
+  });
+  
+  if (!venue) return null;
+  
+  // Step 2: Generate random time (MVP - timing logic to be refined later)
+  const eventTime = generateRandomTime();
+  
+  // Step 3: Create real event
+  return {
+    title: pseudoEvent.title,
+    description: pseudoEvent.description,
+    categories: pseudoEvent.categories,
+    date: eventTime,
+    location: {
+      lat: venue.geometry.location.lat,
+      lng: venue.geometry.location.lng,
+      neighborhood: extractNeighborhood(venue.displayName)
+    },
+    venue: {
+      placeId: venue.place_id,
+      name: venue.displayName,
+      types: venue.types
+    },
+    venueType: venue.types[0],
+    venueRating: venue.rating,
+    venuePriceLevel: venue.priceLevel,
+    hostId: null, // System-generated
+    embedding: null, // Generated after creation
+    attendeesCount: 0,
+    interestedCount: 0
+  };
+}
+```
+
+## API Endpoints
+
+### POST /api/events/generate
+Converts pseudo-events to real events with venues
+- **Input**: Array of PseudoEvent objects
+- **Output**: Array of generated Event objects
+- **Auth**: Required (system use)
+- **Location**: `app/api/events/generate/+api.ts`
+
+### POST /api/user/location
+Sets user's home address for location-based event generation
+- **Input**: { lat: number, lng: number }
+- **Output**: Updated user object
+- **Auth**: Required
+- **Location**: `app/api/user/location/+api.ts`
+
+**Note**: These endpoints won't conflict with existing `/api/events` routes as they serve different purposes.
+
+## Cost Analysis
+- **Free Tier**: 5,000 Search + 5,000 Details/month
+- **Per Event**: 1 Nearby Search + up to 10 Details
+- **Monthly Budget**: ~330 API calls for 1 event/day with 10 venue checks
+- **Cost**: Fully covered by free tier for MVP
+
+## Environment Setup
+Add to `.env`:
+```
+GOOGLE_PLACES_API_KEY=your_api_key_here
+```
+
+## Key Implementation Notes
+
+### 1. **API Integration**
+- Using Google Places API v1 (latest version)
+- Nearby search for location-based venue discovery
+- Details API for rating and price level information
+- Proper error handling for API failures
+
+### 2. **Venue Selection**
+- Distance + rating scoring algorithm
+- Configurable thresholds for quality control
+- Graceful fallback when no suitable venues found
+- Handles API rate limits and failures
+
+### 3. **Data Flow**
+- Pseudo-events from clustering pipeline
+- Real venues from Google Places API
+- Enhanced event records with venue metadata
+- Maintains existing event table structure
+
+### 4. **Location Handling**
+- Uses simplified user location (single JSONB field)
+- Default to Manhattan for users without location
+- Cluster centroids calculated from user locations
+- 5km radius for venue search (configurable)
+
+## Key Distinctions
+- **Event Categories**: User-facing categories (fitness, social, creative) - separate from venue types
+- **Venue Types**: Google Places types (gym, restaurant, park) - used for venue selection only
+- **Location**: Enhanced with Google Places data but maintains existing format
+- **Timing**: MVP uses random times; venue availability logic to be added later
+
+## Implementation Plan
+
+### Phase 1: Foundation
+1. Set up Google Places API key
+2. Install axios for HTTP requests
+3. Create venue search functions
+4. Test with sample coordinates
+
+### Phase 2: Integration
+1. Create event generation endpoint
+2. Implement venue scoring algorithm
+3. Add error handling and fallbacks
+4. Test with pseudo-event data
+
+### Phase 3: Production
+1. Add user location endpoint
+2. Implement automated triggers
+3. Add monitoring and logging
+4. Optimize for scale
+
+## Next Steps
+1. Update database schema with new venue fields
+2. Implement venue search and scoring functions
+3. Create event generation API endpoint
+4. Add user location management
+5. Integrate with pseudo-event generation pipeline
+6. Add venue availability timing logic (future enhancement)
