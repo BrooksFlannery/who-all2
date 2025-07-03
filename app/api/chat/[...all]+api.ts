@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { message, user } from "@/lib/db/schema";
+import { updateUserInterestEmbedding } from "@/lib/embeddings";
 import { chatRequestSchema, chatResponseSchema } from "@/lib/schemas";
 import { createValidationErrorResponse, validateData } from "@/lib/validation";
 import { openai } from "@ai-sdk/openai";
@@ -110,6 +111,11 @@ Generate an updated interest summary that incorporates the new information.`
             .update(user)
             .set({ userInterestSummary: summaryText })
             .where(eq(user.id, userId));
+
+        // Generate and store user interest embedding
+        console.log('🧠 Generating user interest embedding...');
+        await updateUserInterestEmbedding(userId, summaryText);
+        console.log('✅ User interest embedding generated and stored successfully');
 
         // Mark all processed messages as summarized
         console.log(`📝 Marking ${unsummarizedMessages.length} messages as summarized...`);

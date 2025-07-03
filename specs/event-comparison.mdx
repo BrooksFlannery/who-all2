@@ -1,0 +1,72 @@
+# Event Comparison System Specification
+
+## Overview
+System to compare user interest summaries against events using Vercel AI SDK embeddings and Neon pgvector for similarity search.
+
+## Key Technical Components
+
+### Vercel AI SDK Embeddings
+- Use `embed()` for single embeddings (user interests)
+- Use `embedMany()` for batch embeddings (events)
+- Model: `openai.embedding('text-embedding-3-small')` (1536 dimensions)
+- Includes `cosineSimilarity()` function for similarity calculation
+- Token usage tracking available
+
+### Neon pgvector Setup
+- Enable extension: `CREATE EXTENSION vector;`
+- Store embeddings as `VECTOR(1536)` type
+- Use cosine distance (`<=>`) for similarity search
+- HNSW index for performance: `CREATE INDEX ON events USING hnsw (embedding vector_cosine_ops);`
+
+## Database Schema Changes
+
+### User Table
+```sql
+ALTER TABLE user ADD COLUMN interest_embedding VECTOR(1536);
+```
+
+### Event Table  
+```sql
+ALTER TABLE event ADD COLUMN embedding VECTOR(1536);
+```
+
+## Implementation Plan
+
+### Phase 1: Database Setup
+1. Enable pgvector extension
+2. Add embedding columns to user and event tables
+3. Create HNSW index on event embeddings
+
+### Phase 2: Embedding Generation
+1. **User Interest Embeddings**: Generate after summarization step
+2. **Event Embeddings**: Add to seed script - combine title + description + categories
+3. Use `embedMany()` for batch event processing
+
+### Phase 3: Similarity Search
+1. Create `/api/events/recommendations` endpoint
+2. Use cosine similarity with pgvector
+3. Return sorted list with similarity scores
+4. Console log results for now
+
+### Phase 4: Integration
+1. Update summarization flow to include embedding generation
+2. Add comparison endpoint to existing API structure
+3. Integrate with existing testing framework
+
+## API Endpoints
+
+### POST /api/events/recommendations
+- Input: User ID
+- Process: Get user embedding, compare against all events
+- Output: Sorted events with similarity scores
+- Console log: Event name, description, similarity score
+
+## Error Handling
+- Graceful failure if embedding generation fails
+- Log errors but don't break application flow
+
+## Testing Strategy
+- Unit tests for embedding generation
+- Integration tests for similarity calculation
+- Sample data tests for matching quality
+- Integrate with existing test suite

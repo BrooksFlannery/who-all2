@@ -3,6 +3,7 @@ import 'dotenv/config';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { event } from '../lib/db/schema';
 import { EventCategory } from '../lib/db/types';
+import { generateAllEventEmbeddings } from '../lib/embeddings';
 import { validateEnv } from '../lib/validation';
 
 // Validate environment variables
@@ -361,6 +362,12 @@ async function seedEvents() {
         await db.insert(event).values(meetupEvents);
 
         console.log('✅ Successfully seeded events!');
+
+        // Generate embeddings for all events
+        console.log('Generating embeddings for events...');
+        await generateAllEventEmbeddings();
+
+        console.log('✅ Successfully generated all event embeddings!');
         process.exit(0);
     } catch (error) {
         console.error('Error seeding events:', error);
