@@ -7,6 +7,7 @@ export const user = pgTable("user", {
     emailVerified: boolean('email_verified').$defaultFn(() => false).notNull(),
     image: text('image'),
     userInterestSummary: text('user_interest_summary').default('').notNull(),
+    interestEmbedding: text('interest_embedding'), // VECTOR(1536) - will be cast in SQL
     createdAt: timestamp('created_at').$defaultFn(() => /* @__PURE__ */ new Date()).notNull(),
     updatedAt: timestamp('updated_at').$defaultFn(() => /* @__PURE__ */ new Date()).notNull()
 });
@@ -83,14 +84,13 @@ export const event = pgTable("event", {
     description: text("description").notNull(),
     categories: text("categories").array().notNull(), // Array of categories instead of single category
     hostId: text("host_id").references(() => user.id), // Optional - for user-hosted events
+    embedding: text("embedding"), // VECTOR(1536) - will be cast in SQL
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
     // Derived/cached fields
     attendeesCount: integer("attendees_count").default(0).notNull(),
     interestedCount: integer("interested_count").default(0).notNull(),
 });
-
-
 
 export const schema = {
     user,

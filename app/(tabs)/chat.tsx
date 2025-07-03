@@ -7,6 +7,7 @@ export default function ChatScreen() {
   const { messages, input, handleInputChange, handleSubmit, isLoading, loadMessageHistory } = useChat();
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const [isComparingEvents, setIsComparingEvents] = useState(false);
 
   // Load message history when component mounts (only once)
   useEffect(() => {
@@ -67,6 +68,43 @@ export default function ChatScreen() {
     }
   }, []);
 
+  // Function to trigger event comparisons (debug feature)
+  const handleCompareEvents = useCallback(async () => {
+    console.log('🔘 Event comparison button clicked');
+    setIsComparingEvents(true);
+    try {
+      console.log('📡 Making request to /api/events/recommendations...');
+      const response = await fetch('/api/events/recommendations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('📥 Response received, status:', response.status);
+      const result = await response.json();
+      console.log('📋 Response data:', result);
+
+      if (response.ok) {
+        console.log('✅ Event comparison successful');
+        const count = result.recommendations?.length || 0;
+        Alert.alert(
+          'Event Comparison Complete',
+          `Found ${count} event recommendations. Check console for details.`
+        );
+      } else {
+        console.log('❌ Event comparison failed:', result);
+        Alert.alert('Error', 'Failed to get event recommendations.');
+      }
+    } catch (error) {
+      console.error('💥 Event comparison request failed:', error);
+      Alert.alert('Error', 'Failed to connect to recommendations service.');
+    } finally {
+      console.log('🏁 Event comparison process finished');
+      setIsComparingEvents(false);
+    }
+  }, []);
+
   // Render each message in the chat
   const renderMessage = useCallback(({ item }: { item: any }) => {
     return (
@@ -98,7 +136,7 @@ export default function ChatScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* Debug Button - Temporary for development */}
+      {/* Debug Buttons - Temporary for development */}
       <View style={styles.debugContainer}>
         <TouchableOpacity
           style={[styles.debugButton, isSummarizing && styles.debugButtonDisabled]}
@@ -107,6 +145,15 @@ export default function ChatScreen() {
         >
           <ThemedText style={styles.debugButtonText}>
             {isSummarizing ? 'Summarizing...' : 'Debug: Summarize Chat'}
+          </ThemedText>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.debugButton, styles.debugButtonSecondary, isComparingEvents && styles.debugButtonDisabled]}
+          onPress={handleCompareEvents}
+          disabled={isComparingEvents}
+        >
+          <ThemedText style={styles.debugButtonText}>
+            {isComparingEvents ? 'Comparing...' : 'Debug: Compare Events'}
           </ThemedText>
         </TouchableOpacity>
       </View>
@@ -162,6 +209,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     alignSelf: 'center',
+    marginBottom: 4,
+  },
+  debugButtonSecondary: {
+    backgroundColor: '#34C759',
   },
   debugButtonDisabled: {
     backgroundColor: '#C7C7CC',
