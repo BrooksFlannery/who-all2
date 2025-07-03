@@ -1,171 +1,254 @@
+import { Event, Location } from '../db/types';
 import { fetchAvailableEvents, fetchUserInterests, recordShownRecommendation } from './db-helpers';
 import { calculateSimilarityScores } from './embeddings';
 
 /**
- * Get personalized event recommendations for a user based on their interests.
- * Returns a conversational string with formatted recommendations.
+ * Response structure for event recommendations
+ * Contains the recommended events, a user-friendly message, and success status
+ */
+export interface RecommendationResponse {
+    events: Event[];
+    message: string;
+    success: boolean;
+    error?: string;
+}
+
+/**
+ * Converts a database event object to the standardized Event type
+ * This ensures type safety and consistent data structure across the application
+ * 
+ * @param dbEvent - Raw event data from the database
+ * @returns Standardized Event object with proper typing
+ */
+function convertDbEventToEvent(dbEvent: any): Event {
+    const converted = {
+        id: dbEvent.id,
+        title: dbEvent.title,
+        date: dbEvent.date,
+        location: dbEvent.location as Location,
+        description: dbEvent.description,
+        categories: dbEvent.categories as any as Event['categories'],
+        hostId: dbEvent.hostId || undefined,
+        createdAt: dbEvent.createdAt,
+        updatedAt: dbEvent.updatedAt,
+        attendeesCount: dbEvent.attendeesCount,
+        interestedCount: dbEvent.interestedCount,
+    };
+    return converted;
+}
+
+/**
+ * Main recommendation engine that provides personalized event suggestions
+ * 
+ * This function implements a sophisticated scoring algorithm that combines:
+ * 1. Semantic similarity between user interests and event keywords
+ * 2. User interest confidence and specificity scores
+ * 3. Event popularity metrics
+ * 4. Fallback strategies for users with no interests or events without keywords
+ * 
+ * Algorithm Overview:
+ * - Fetches user interests and available events (excluding previously shown)
+ * - If no user interests exist, falls back to popularity-based recommendations
+ * - For users with interests: calculates semantic similarity using embeddings
+ * - Scores each event using a weighted formula combining multiple factors
+ * - Returns top-scoring events and records them as "shown" to prevent repetition
+ * 
+ * @param userId - Unique identifier for the user requesting recommendations
+ * @param limit - Maximum number of events to recommend (default: 3)
+ * @returns Promise resolving to RecommendationResponse with events and metadata
  */
 export async function getEventRecommendations(
     userId: string,
     limit: number = 3
-): Promise<string> {
+): Promise<RecommendationResponse> {
     try {
-        console.log(`🎪 Getting recommendations for user ${userId}`);
-
-        // Fetch user interests from database
+        // Step 1: Gather user data and available events
         const userInterests = await fetchUserInterests(userId);
         const interestKeywords = userInterests.map(interest => interest.keyword);
 
-        console.log(`📊 User has ${interestKeywords.length} interests: ${interestKeywords.join(', ')}`);
+        // Fetch more events than needed to ensure good selection pool
+        // We request 50 events but only return 'limit' number
+        const availableEvents = await fetchAvailableEvents(userId, 50);
 
-        // Fetch events (excluding previously shown)
-        const availableEvents = await fetchAvailableEvents(userId, 50); // Get more events for better selection
-        console.log(`📋 Found ${availableEvents.length} available events`);
-
+        // Early exit if no events are available
         if (availableEvents.length === 0) {
-            console.log("❌ No events available");
-            return "I don't have any events to recommend right now, but I'm working on finding more activities that match your interests!";
+            return {
+                events: [],
+                message: "I don't have any events to recommend right now, but I'm working on finding more activities that match your interests!",
+                success: true
+            };
         }
 
-        // If user has no interests, fall back to popular events
+        // Step 2: Handle users with no interests - fallback to popularity-based recommendations
         if (interestKeywords.length === 0) {
-            console.log("📈 No user interests found, recommending popular events");
+            // Sort events by combined popularity (interested + attending)
             const popularEvents = availableEvents
-                .sort((a, b) => (b.interestedCount + b.attendeesCount) - (a.interestedCount + a.attendeesCount))
+                .sort((a, b) => {
+                    const aPopularity = a.interestedCount + a.attendeesCount;
+                    const bPopularity = b.interestedCount + b.attendeesCount;
+                    return bPopularity - aPopularity; // Descending order
+                })
                 .slice(0, limit);
 
-            // Record shown recommendations
+            // Record these events as shown to prevent future repetition
             for (const event of popularEvents) {
-                await recordShownRecommendation(userId, event.id, 0.5); // Default score for popular events
+                await recordShownRecommendation(userId, event.id, 0.5); // Lower score for non-personalized recommendations
             }
 
-            const eventList = popularEvents.map(event =>
-                `• ${event.title} - ${event.description}`
-            ).join('\n');
+            const convertedEvents = popularEvents.map(convertDbEventToEvent);
 
-            console.log(`✅ Recommended ${popularEvents.length} popular events`);
-            return `Here are some popular events you might enjoy:\n\n${eventList}\n\nWould you like to know more about any of these?`;
+            return {
+                events: convertedEvents,
+                message: `Here are some popular events you might enjoy!`,
+                success: true
+            };
         }
 
-        // Calculate similarity scores for events with keywords
-        const eventsWithKeywords = availableEvents.filter(e => e.keywords && e.keywords.length > 0);
-        console.log(`🏷️  Found ${eventsWithKeywords.length} events with keywords`);
+        // Step 3: Filter events to only those with keywords for semantic matching
+        // Events without keywords cannot be semantically matched to user interests
+        const eventsWithKeywords = availableEvents.filter(e => {
+            const hasKeywords = e.keywords && e.keywords.length > 0;
+            return hasKeywords;
+        });
 
-        // Log some sample events and their keywords
-        if (eventsWithKeywords.length > 0) {
-            console.log("📝 Sample events with keywords:");
-            eventsWithKeywords.slice(0, 3).forEach((event, i) => {
-                console.log(`  ${i + 1}. "${event.title}" - Keywords: [${event.keywords?.join(', ')}]`);
-            });
-        }
-
+        // Step 4: Handle case where no events have keywords - fallback to popularity
         if (eventsWithKeywords.length === 0) {
-            // Fall back to popular events if no events have keywords
-            console.log("📈 No events with keywords found, recommending popular events");
             const popularEvents = availableEvents
-                .sort((a, b) => (b.interestedCount + b.attendeesCount) - (a.interestedCount + a.attendeesCount))
+                .sort((a, b) => {
+                    const aPopularity = a.interestedCount + a.attendeesCount;
+                    const bPopularity = b.interestedCount + b.attendeesCount;
+                    return bPopularity - aPopularity;
+                })
                 .slice(0, limit);
 
             for (const event of popularEvents) {
                 await recordShownRecommendation(userId, event.id, 0.5);
             }
 
-            const eventList = popularEvents.map(event =>
-                `• ${event.title} - ${event.description}`
-            ).join('\n');
+            const convertedEvents = popularEvents.map(convertDbEventToEvent);
 
-            console.log(`✅ Recommended ${popularEvents.length} popular events (fallback)`);
-            return `Here are some popular events you might enjoy:\n\n${eventList}\n\nWould you like to know more about any of these?`;
+            return {
+                events: convertedEvents,
+                message: `Here are some popular events you might enjoy!`,
+                success: true
+            };
         }
 
-        // Calculate similarity scores
+        // Step 5: Calculate semantic similarity between user interests and event keywords
+        // This is the core of our recommendation algorithm
         const allEventKeywords = eventsWithKeywords.flatMap(e => e.keywords || []);
-        console.log(`🔍 Calculating similarity between ${interestKeywords.length} user interests and ${allEventKeywords.length} event keywords`);
-        console.log(`👤 User interests: [${interestKeywords.join(', ')}]`);
-        console.log(`🎪 Event keywords sample: [${allEventKeywords.slice(0, 10).join(', ')}${allEventKeywords.length > 10 ? '...' : ''}]`);
 
+        // Get similarity scores for all interest-keyword pairs
+        // Returns a flat array in interest-major order: [interest1_keyword1, interest1_keyword2, ..., interest2_keyword1, ...]
         const similarityScores = await calculateSimilarityScores(interestKeywords, allEventKeywords);
-        console.log(`📊 Got ${similarityScores.length} similarity scores`);
 
-        // Calculate event scores using the scoring formula
+        // Step 6: Build index mapping for efficient similarity score lookup
+        // This maps each unique keyword to its position in the flattened allEventKeywords array
+        const keywordIndexMap = new Map<string, number>();
+        allEventKeywords.forEach((kw, idx) => {
+            if (!keywordIndexMap.has(kw)) {
+                keywordIndexMap.set(kw, idx);
+            }
+        });
+
+        // Step 7: Calculate comprehensive scores for each event
+        // This is where we combine multiple factors into a single recommendation score
         const eventScores: Array<{
             event: typeof eventsWithKeywords[0];
             score: number;
             matchReasons: string[];
         }> = [];
 
-        let keywordIndex = 0;
         for (const event of eventsWithKeywords) {
             const eventKeywords = event.keywords || [];
             const eventSimilarities: number[] = [];
             const matchReasons: string[] = [];
 
-            // Get similarity scores for this event's keywords
+            // Step 7a: Extract similarity scores for this event's keywords
+            // We need to map from the flat similarity array back to specific interest-keyword pairs
             for (const eventKeyword of eventKeywords) {
-                for (const interestKeyword of interestKeywords) {
-                    const similarity = similarityScores[keywordIndex++];
+                const globalKeywordIdx = keywordIndexMap.get(eventKeyword);
+                if (globalKeywordIdx === undefined) {
+                    continue; // Skip if keyword not found (shouldn't happen with proper data)
+                }
+
+                // For each user interest, get the similarity score with this event keyword
+                for (let interestIdx = 0; interestIdx < interestKeywords.length; interestIdx++) {
+                    // Calculate the correct index in the flat similarity array
+                    // Formula: (interest_index * total_keywords) + keyword_index
+                    const similarityIdx = (interestIdx * allEventKeywords.length) + globalKeywordIdx;
+                    const similarity = similarityScores[similarityIdx] || 0;
                     eventSimilarities.push(similarity);
-                    if (similarity > 0.3) {
-                        matchReasons.push(`Matches your interest in "${interestKeyword}"`);
+
+                    // Collect match reasons for any positive similarity (no threshold filtering)
+                    if (similarity > 0) {
+                        const reason = `Matches your interest in "${interestKeywords[interestIdx]}"`;
+                        matchReasons.push(reason);
                     }
                 }
             }
 
-            // Always calculate a score for every event, even if no strong matches
+            // Step 7b: Calculate average scores from user interest metadata
+            // These provide context about how confident we are in the user's interests
             const avgConfidence = userInterests.reduce((sum, interest) => sum + parseFloat(interest.confidenceScore), 0) / userInterests.length;
             const avgSpecificity = userInterests.reduce((sum, interest) => sum + parseFloat(interest.specificityScore), 0) / userInterests.length;
+
+            // Calculate average similarity score for this event
             const avgSimilarity = eventSimilarities.length > 0 ? eventSimilarities.reduce((sum, score) => sum + score, 0) / eventSimilarities.length : 0;
 
-            // Popularity score (normalized)
+            // Step 7c: Calculate normalized popularity score
+            // This ensures events with high engagement get a boost, but not overwhelming
             const maxPopularity = Math.max(...eventsWithKeywords.map(e => e.interestedCount + e.attendeesCount));
             const popularityScore = (event.interestedCount + event.attendeesCount) / (maxPopularity || 1);
 
-            // Apply scoring formula: (0.5 * semantic_similarity) + (0.2 * confidence) + (0.2 * specificity) + (0.1 * popularity)
+            // Step 7d: Apply the final scoring formula
+            // Weights: 50% similarity, 20% confidence, 20% specificity, 10% popularity
+            // This balances personalization with social proof and interest quality
             const score = (0.5 * avgSimilarity) + (0.2 * avgConfidence) + (0.2 * avgSpecificity) + (0.1 * popularityScore);
 
             eventScores.push({
                 event,
                 score,
-                matchReasons: [...new Set(matchReasons)] // Remove duplicates
+                matchReasons: [...new Set(matchReasons)] // Remove duplicate reasons
             });
         }
 
-        // Sort by score and take top results
+        // Step 8: Sort events by score and select top recommendations
         const topEvents = eventScores
-            .sort((a, b) => b.score - a.score)
+            .sort((a, b) => b.score - a.score) // Descending order
             .slice(0, limit);
 
-        console.log(`🎯 Found ${eventScores.length} events with matches, top ${topEvents.length} scores:`);
-        topEvents.forEach(({ event, score, matchReasons }, i) => {
-            console.log(`  ${i + 1}. "${event.title}" - Score: ${score.toFixed(3)}, Reasons: [${matchReasons.join(', ')}]`);
-        });
-
-        // Also log the scores for all returned events
-        console.log('🔢 Returned event scores:');
-        topEvents.forEach(({ event, score }, i) => {
-            console.log(`  ${i + 1}. ${event.title} (score: ${score.toFixed(3)})`);
-        });
-
-        // Record shown recommendations
+        // Step 9: Record these events as shown to prevent future repetition
+        // Higher score (0.8) indicates these were personalized recommendations
         for (const { event } of topEvents) {
-            await recordShownRecommendation(userId, event.id, 0.8); // High score for personalized recommendations
+            await recordShownRecommendation(userId, event.id, 0.8);
         }
 
+        // Step 10: Handle edge case where no events scored well
         if (topEvents.length === 0) {
-            console.log("❌ No matching events found");
-            console.log("🔍 Debug: eventScores array is empty, which means no events passed the similarity threshold");
-            return "I couldn't find any events that match your interests right now, but I'm working on finding more activities for you!";
+            return {
+                events: [],
+                message: "I couldn't find any events that match your interests right now, but I'm working on finding more activities for you!",
+                success: true
+            };
         }
 
-        const eventList = topEvents.map(({ event, score, matchReasons }) =>
-            `• ${event.title} - ${event.description}`
-        ).join('\n');
+        // Step 11: Convert and return final recommendations
+        const finalEvents = topEvents.map(({ event }) => convertDbEventToEvent(event));
 
-        console.log(`✅ Recommended ${topEvents.length} personalized events`);
-        return `Here are some events that match your interests:\n\n${eventList}\n\nWould you like to know more about any of these?`;
+        return {
+            events: finalEvents,
+            message: `I found ${topEvents.length} events that might interest you!`,
+            success: true
+        };
 
     } catch (error) {
-        console.error('❌ Error in getEventRecommendations:', error);
-        return "I'm having trouble finding events right now, but I'm working on it!";
+        // Graceful error handling - return empty result rather than crashing
+        return {
+            events: [],
+            message: "I'm having trouble finding events right now, but I'm working on it!",
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error'
+        };
     }
 } 

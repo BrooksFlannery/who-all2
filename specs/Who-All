@@ -1,0 +1,131 @@
+MVP Tech Spec: Chat-Driven Event Recommender
+📌 Product Summary
+An app where NYC users chat with a friendly AI bot that gets to know them over time. From those chats, the system builds a running interest profile per user, generates embeddings from that profile, and recommends in-person events created automatically when enough users share compatible interests.
+
+🧑‍💻 Core User Flow
+User signs up (accounts required).
+
+User chats with the AI assistant — freeform conversation but steered to extract interests.
+
+Bot builds a running interest summary from the chats.
+
+System embeds that summary into a vector representation.
+
+Event descriptions are also embedded.
+
+Users are matched to events by semantic similarity between their interest embedding and the event embedding.
+
+Events are recommended in-app, based on a confidence threshold and location.
+
+Users can see number of interested attendees and opt in or ignore events.
+
+⚙️ Components
+🧠 AI Assistant
+Uses GPT to engage in friendly, casual interest-finding conversations.
+
+Periodically summarizes user interests (triggered manually, or after meaningful input).
+
+Summary is a natural-language paragraph or bullet list.
+
+📝 Interest Summary
+GPT-generated string updated incrementally.
+
+Example: "Loves '90s comedy films, interested in tai chi and meditation, dislikes loud parties, lives in Bushwick, curious about printmaking."
+
+📐 Embedding Engine
+Uses OpenAI (or equivalent) embedding model (e.g., text-embedding-3-small) to turn:
+
+Interest summaries → user vectors
+
+Event descriptions → event vectors
+
+Vectors stored in the DB as float[].
+
+🎯 Matching Logic
+Cosine similarity used to compare user vector ↔ event vectors.
+
+Events recommended if:
+
+similarity > threshold (e.g., 0.85)
+
+event is in public NYC location
+
+Matching run on a schedule (e.g., daily) or triggered manually.
+
+📅 Event Generator
+App auto-generates events based on interest clusters.
+
+Public space only, one-off events for MVP.
+
+Event includes:
+
+Title, Description, Date, Location
+
+Generated based on user interest clusters + public places
+
+Embedded on creation
+
+🧱 Data Models (simplified)
+ts
+Copy
+Edit
+User {
+  id: string
+  name: string
+  location: string
+  interestSummary: string
+  interestEmbedding: float[]
+  chatHistory: Message[]  // optional, partial log
+  createdAt: Date
+}
+
+Event {
+  id: string
+  title: string
+  description: string
+  location: string
+  date: Date
+  creator: "system"
+  eventEmbedding: float[]
+  interestedUserIds: string[]
+  createdAt: Date
+}
+🔐 Privacy & Data
+Accounts required.
+
+Users may delete their account, which deletes:
+
+Chat history
+
+Summary
+
+Embedding
+
+Profile
+
+Interest tags and embeddings are persistent while user is active.
+
+User visibility is limited; other attendees may only be seen based on privacy settings.
+
+🚫 Out of Scope for MVP
+Availability/calendar scheduling
+
+Group chat or event coordination tools
+
+Hosting tools / user-submitted events
+
+Friends system or user profile browsing
+
+Notifications beyond basic recommendations
+
+Vector store (for now — using DB-stored vectors and in-memory similarity)
+
+✅ MVP Success Criteria
+Users feel like the bot understands their interests.
+
+Events are relevant and not hallucinated.
+
+At least some events get user signups, even from a small seed group.
+
+The interest embedding system scales better than manual tags.
+
