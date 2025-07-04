@@ -48,6 +48,9 @@ export const locationSchema = z.object({
     lat: z.number().min(-90).max(90),
     lng: z.number().min(-180).max(180),
     neighborhood: z.string().optional(),
+    placeId: z.string().optional(),
+    venueName: z.string().optional(),
+    photoReference: z.string().optional(),
 });
 
 export const eventSchema = z.object({

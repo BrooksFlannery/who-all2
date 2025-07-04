@@ -7,10 +7,12 @@ import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/components/AuthProvider';
 import { useColorScheme } from '@/hooks/useColorScheme';
+import { usePrimaryColor } from '@/hooks/useThemeColor';
 
 function RootLayoutContent() {
   const colorScheme = useColorScheme();
   const { user, isLoading } = useAuth();
+  const primaryColor = usePrimaryColor();
   const [loaded] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
   });
@@ -19,7 +21,7 @@ function RootLayoutContent() {
     // Show loading screen while fonts are loading or auth is checking
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#0a7ea4" />
+        <ActivityIndicator size="large" color={primaryColor} />
       </View>
     );
   }
