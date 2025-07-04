@@ -5,7 +5,7 @@
 // HDBSCAN Clustering Parameters
 export const CLUSTERING_CONFIG = {
     // Minimum number of users required to form a cluster
-    MIN_CLUSTER_SIZE: 2, // Reduced from 20 for development/testing
+    MIN_CLUSTER_SIZE: 5, // Reduced from 20 for development/testing
 
     // Minimum number of neighbors required for a point to be considered a "core point"
     // Core points can start new clusters. Lower values = more sensitive clustering
@@ -105,5 +105,5 @@ export const VENUE_SCORING_CONFIG = {
 
     // Search parameters
     DEFAULT_MAX_RESULTS: 20,   // Default max venues to search
-    DEFAULT_MAX_DETAIL_FETCHES: 10 // Default max venues to check details
+    DEFAULT_MAX_DETAIL_FETCHES: 5 // Default max venues to check details
 } as const; 

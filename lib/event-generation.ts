@@ -123,7 +123,7 @@ export async function generateRealEvent(pseudoEvent: PseudoEvent, apiKey: string
         venue: venueToEventVenue(venue),
         venueType: venue.types[0],
         venueRating: venue.rating,
-        venuePriceLevel: venue.priceLevel,
+        venuePriceLevel: venue.priceLevel ? parseInt(venue.priceLevel.toString().replace('PRICE_LEVEL_', '')) : undefined,
         hostId: null, // System-generated
         embedding: null, // Generated after creation
         attendeesCount: 0,
