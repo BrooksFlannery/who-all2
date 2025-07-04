@@ -39,7 +39,9 @@ interface PseudoEvent {
     center: { lat: number; lng: number };
     radiusMeters: number;           // e.g. 5000 (5km)
   };
-  venueTypeQuery: string;           // e.g. "rock climbing gym", "coffee shop"
+  venueTypeQuery: string;           // e.g. "rock climbing gym", "coffee shop" (precise description)
+  googleVenueTypes: string[];       // e.g. ["gym"], ["cafe", "coffee_shop"] (Google Places API types)
+  venueTypeConfidence: number;      // e.g. 0.85 (confidence in semantic mapping)
   estimatedAttendees: number;       // Hard-coded to 20 for MVP
   clusterUserIds: string[];         // Users in this interest cluster
   generatedFrom: {
@@ -48,6 +50,8 @@ interface PseudoEvent {
   };
 }
 ```
+
+**Note**: The `googleVenueTypes` and `venueTypeConfidence` fields are populated by semantic matching against Google Places API types. This allows for precise venue type mapping while maintaining the specificity of the original `venueTypeQuery`.
 
 ## Implementation Steps
 
@@ -226,7 +230,7 @@ function calculateClusterLocation(clusterUserIds: string[], users: User[]): { la
 }
 ```
 
-### 6. Venue Type Extraction
+### 6. Venue Type Extraction and Semantic Matching
 
 ```typescript
 async function extractVenueTypes(eventDescriptions: string[]): Promise<string[]> {
@@ -248,6 +252,18 @@ Respond with just the venue types, one per line, in order:
   });
   
   return parseVenueTypes(response.choices[0].message.content);
+}
+
+// TODO: This function needs to be implemented by another agent
+async function performSemanticVenueTypeMatching(venueTypeQueries: string[]): Promise<{
+  googleVenueTypes: string[][];
+  venueTypeConfidences: number[];
+}> {
+  // This function should:
+  // 1. Use embeddings to find closest Google Places API types for each venueTypeQuery
+  // 2. Calculate confidence scores for each mapping
+  // 3. Return arrays of googleVenueTypes and confidences
+  throw new Error("Semantic venue type matching not yet implemented");
 }
 ```
 
@@ -292,6 +308,8 @@ async function generatePseudoEvents(): Promise<PseudoEvent[]> {
         radiusMeters: 5000 // 5km radius
       },
       venueTypeQuery: '', // Will be filled in next step
+      googleVenueTypes: [], // Will be filled in next step
+      venueTypeConfidence: 0, // Will be filled in next step
       estimatedAttendees: 20, // Hard-coded for MVP
       clusterUserIds: cluster.userIds,
       generatedFrom: {
@@ -307,9 +325,14 @@ async function generatePseudoEvents(): Promise<PseudoEvent[]> {
   const descriptions = pseudoEvents.map(pe => pe.description);
   const venueTypes = await extractVenueTypes(descriptions);
   
-  // Step 9: Update pseudo-events with venue types
+  // Step 9: Perform semantic venue type matching
+  const semanticResults = await performSemanticVenueTypeMatching(venueTypes);
+  
+  // Step 10: Update pseudo-events with venue types and semantic matching results
   pseudoEvents.forEach((pe, index) => {
     pe.venueTypeQuery = venueTypes[index];
+    pe.googleVenueTypes = semanticResults.googleVenueTypes[index];
+    pe.venueTypeConfidence = semanticResults.venueTypeConfidences[index];
   });
   
   console.log(`Generated ${pseudoEvents.length} pseudo-events`);
@@ -338,6 +361,8 @@ The script outputs an array of PseudoEvent objects that can be directly fed into
     categories: ["fitness", "social"],
     targetLocation: { center: { lat: 40.7128, lng: -74.0060 }, radiusMeters: 5000 },
     venueTypeQuery: "rock climbing gym",
+    googleVenueTypes: ["gym"],
+    venueTypeConfidence: 0.85,
     estimatedAttendees: 20,
     clusterUserIds: ["user1", "user2", ...],
     generatedFrom: { centroidUserIds: ["user1", "user3", ...], clusterId: "cluster_0" }
@@ -394,3 +419,59 @@ The script outputs an array of PseudoEvent objects that can be directly fed into
 3. Implement cluster quality metrics
 4. Add event similarity checking
 5. Optimize for production scale
+
+## TODO: Semantic Venue Type Matching Implementation
+**This section needs to be implemented by another agent:**
+
+The semantic venue type matching system requires integration with the pseudo-event generation pipeline:
+
+### 1. **Semantic Matching Function Implementation**
+- Create `performSemanticVenueTypeMatching()` function
+- Use OpenAI embeddings to find closest Google Places API types
+- Calculate confidence scores for each mapping
+- Support multiple venue types when semantic similarity is close
+
+### 2. **Google Places Types Database**
+- Create comprehensive list of all valid Google Places API types
+- Generate embeddings for each type using OpenAI
+- Store in code (not database) for performance
+- Include type descriptions for better semantic matching
+
+### 3. **Integration Requirements**
+- Update pseudo-event generation to call semantic matching function
+- Handle cases where semantic matching fails (fallback to keyword matching)
+- Implement confidence thresholds for mapping quality
+- Add error handling for embedding generation failures
+
+### 4. **Performance Considerations**
+- Cache embeddings for Google Places types
+- Implement batching for large numbers of venue type queries
+- Add timeout handling for embedding API calls
+- Consider rate limiting for OpenAI API usage
+
+### 5. **Global Configuration Variables**
+```typescript
+// Semantic matching thresholds
+export const SEMANTIC_MATCH_THRESHOLD = 0.7;    // Minimum similarity for semantic match
+export const CONFIDENCE_THRESHOLD = 0.6;         // Minimum confidence for venue type mapping
+export const MAX_VENUE_TYPES_PER_QUERY = 3;     // Maximum venue types to return per query
+
+// Clustering parameters
+export const MIN_CLUSTER_SIZE = 20;              // Minimum users per cluster
+export const MIN_SAMPLES = 5;                    // Minimum samples for HDBSCAN
+export const CLUSTER_SIMILARITY_THRESHOLD = 0.8; // Minimum similarity for centroid selection
+
+// Event generation parameters
+export const DEFAULT_ATTENDEES = 20;             // Default estimated attendees
+export const DEFAULT_RADIUS_METERS = 5000;       // Default search radius
+export const CENTROID_USERS_COUNT = 5;           // Number of centroid users to use
+export const DESCRIPTIONS_PER_CLUSTER = 5;       // Number of event descriptions to generate
+```
+
+**Implementation Priority:**
+1. Create Google Places types database with embeddings
+2. Implement semantic matching function
+3. Integrate with pseudo-event generation pipeline
+4. Add fallback mechanisms and error handling
+5. Optimize for performance and scale
+6. **Create global configuration variables** for all thresholds and parameters

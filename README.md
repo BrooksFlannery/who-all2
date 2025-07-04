@@ -21,6 +21,7 @@ Who-All is an intelligent event discovery platform that uses conversational AI t
 3. **Profile Generation**: Your interests are summarized and converted to vector embeddings
 4. **Event Matching**: System finds events with high semantic similarity to your interests
 5. **Event Discovery**: Browse and join events that match your profile
+6. **Pseudo-Event Generation**: System automatically creates events based on user interest clusters
 
 ## 🏗️ Technical Architecture
 
@@ -30,6 +31,7 @@ Who-All is an intelligent event discovery platform that uses conversational AI t
 - **Embedding Engine**: OpenAI embeddings for user interests and event descriptions
 - **Matching Algorithm**: Cosine similarity-based event recommendations
 - **Event Generator**: Automated event creation based on interest clusters
+- **Pseudo-Event System**: HDBSCAN clustering + OpenAI event generation
 
 ### Tech Stack
 
@@ -108,9 +110,35 @@ cp .env.example .env
 npx expo start
 ```
 
-## 📊 Data Models
+5. Generate pseudo-events (optional):
+```bash
+npm run generate-pseudo-events
+```
 
-### User
+## 🤖 Pseudo-Event Generation
+
+The system automatically generates events based on user interest clusters:
+
+### How It Works
+1. **User Clustering**: HDBSCAN algorithm groups users with similar interests
+2. **Centroid Selection**: Finds the most representative users in each cluster
+3. **Event Generation**: OpenAI creates diverse event descriptions based on cluster interests
+4. **Event Selection**: Embedding similarity selects the best event for each cluster
+5. **Venue Matching**: AI extracts appropriate venue types for each event
+
+### Running Pseudo-Event Generation
+```bash
+npm run generate-pseudo-events
+```
+
+This script will:
+- Cluster users by interest embeddings
+- Generate 5 event descriptions per cluster
+- Select the best event via embedding similarity
+- Extract appropriate venue types
+- Output detailed statistics and results
+
+## 📊 Data Models
 ```typescript
 {
   id: string
