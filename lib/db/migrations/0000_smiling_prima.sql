@@ -1,6 +1,4 @@
 CREATE TYPE "public"."event_category" AS ENUM('fitness', 'social', 'creative', 'technology', 'education', 'food', 'music', 'outdoors', 'business', 'other');--> statement-breakpoint
-CREATE TYPE "public"."interaction_source" AS ENUM('chat', 'browse', 'external');--> statement-breakpoint
-CREATE TYPE "public"."interaction_status" AS ENUM('interested', 'going', 'not_interested');--> statement-breakpoint
 CREATE TYPE "public"."role" AS ENUM('user', 'assistant', 'tool', 'system');--> statement-breakpoint
 CREATE TABLE "account" (
 	"id" text PRIMARY KEY NOT NULL,
@@ -25,20 +23,16 @@ CREATE TABLE "event" (
 	"location" jsonb NOT NULL,
 	"description" text NOT NULL,
 	"categories" text[] NOT NULL,
+	"venue" jsonb,
+	"venue_type" text,
+	"venue_rating" integer,
+	"venue_price_level" integer,
 	"host_id" text,
+	"embedding" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"attendees_count" integer DEFAULT 0 NOT NULL,
 	"interested_count" integer DEFAULT 0 NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "event_interaction" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"user_id" text NOT NULL,
-	"event_id" uuid NOT NULL,
-	"status" "interaction_status" NOT NULL,
-	"source" "interaction_source" NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "message" (
@@ -69,23 +63,12 @@ CREATE TABLE "user" (
 	"email_verified" boolean NOT NULL,
 	"image" text,
 	"user_interest_summary" text DEFAULT '' NOT NULL,
+	"interest_embedding" text,
+	"recommended_event_ids" text[] DEFAULT '{}' NOT NULL,
+	"location" jsonb,
 	"created_at" timestamp NOT NULL,
 	"updated_at" timestamp NOT NULL,
 	CONSTRAINT "user_email_unique" UNIQUE("email")
-);
---> statement-breakpoint
-CREATE TABLE "user_profile" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"user_id" text NOT NULL,
-	"name" text NOT NULL,
-	"location" jsonb NOT NULL,
-	"interests" text[],
-	"preferences" jsonb NOT NULL,
-	"last_interest_analysis" timestamp with time zone,
-	"interest_analysis_version" integer DEFAULT 1,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "user_profile_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
 CREATE TABLE "verification" (
@@ -99,8 +82,5 @@ CREATE TABLE "verification" (
 --> statement-breakpoint
 ALTER TABLE "account" ADD CONSTRAINT "account_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "event" ADD CONSTRAINT "event_host_id_user_id_fk" FOREIGN KEY ("host_id") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "event_interaction" ADD CONSTRAINT "event_interaction_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "event_interaction" ADD CONSTRAINT "event_interaction_event_id_event_id_fk" FOREIGN KEY ("event_id") REFERENCES "public"."event"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "message" ADD CONSTRAINT "message_userId_user_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "session" ADD CONSTRAINT "session_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "user_profile" ADD CONSTRAINT "user_profile_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "session" ADD CONSTRAINT "session_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;

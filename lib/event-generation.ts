@@ -1,4 +1,5 @@
-import { findBestVenue, PseudoEvent, VenueCandidate } from './google-places';
+import { findBestVenue, VenueCandidate } from './google-places';
+import { PseudoEvent } from './pseudo-events';
 
 // Types for event generation
 export interface Event {
@@ -15,6 +16,10 @@ export interface Event {
         placeId: string;
         name: string;
         types: string[];
+        formattedAddress?: string;    // ✅ ADD - Critical for directions
+        googleMapsUri?: string;       // ✅ ADD - Easy navigation
+        primaryType?: string;         // ✅ ADD - Better categorization
+        primaryTypeDisplayName?: string; // ✅ ADD - Human-readable type
     };
     venueType?: string;
     venueRating?: number;
@@ -69,7 +74,11 @@ function venueToEventVenue(venue: VenueCandidate) {
     return {
         placeId: venue.id,
         name: venue.displayName.text,
-        types: venue.types
+        types: venue.types,
+        formattedAddress: venue.formattedAddress,
+        googleMapsUri: venue.googleMapsUri,
+        primaryType: venue.primaryType,
+        primaryTypeDisplayName: venue.primaryTypeDisplayName
     };
 }
 

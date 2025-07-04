@@ -1,0 +1,370 @@
+# Seed Users Script Specification
+
+## Overview
+This document outlines the implementation plan for creating a comprehensive seed users script that will populate the database with realistic test data. The script will create mock users with diverse interests, generate system messages to create user summaries, and trigger the embedding generation process.
+
+## Current State
+- ✅ Database schema is ready
+- ✅ User clustering and pseudo-event generation logic exists
+- ✅ Full pipeline test script exists
+- ❌ Database is empty - no users to test with
+- ❌ No way to test enhanced venue data capture
+- ❌ No realistic test data for development
+
+## Goals
+1. **Create diverse mock users** with realistic interests and locations
+2. **Generate system messages** that will trigger user summary creation
+3. **Trigger embedding generation** for user clustering
+4. **Enable full pipeline testing** with enhanced venue data
+5. **Provide realistic test scenarios** for development
+
+## User Profiles to Create
+
+### **Fitness & Wellness Cluster**
+```typescript
+const fitnessUsers = [
+    {
+        id: 'user-fitness-1',
+        name: 'Sarah Chen',
+        email: 'sarah.chen@example.com',
+        interests: ['yoga', 'meditation', 'healthy eating', 'mindfulness'],
+        location: { lat: 40.7589, lng: -73.9851 }, // Times Square area
+        messages: [
+            "I love attending yoga classes and meditation workshops",
+            "Looking for healthy food spots and wellness activities",
+            "Interested in mindfulness and stress relief techniques"
+        ]
+    },
+    {
+        id: 'user-fitness-2', 
+        name: 'Marcus Johnson',
+        email: 'marcus.johnson@example.com',
+        interests: ['weightlifting', 'crossfit', 'protein nutrition', 'gym culture'],
+        location: { lat: 40.7505, lng: -73.9934 }, // Chelsea area
+        messages: [
+            "I'm a regular at the gym and love strength training",
+            "Looking for CrossFit communities and fitness challenges",
+            "Interested in nutrition and meal prep for athletes"
+        ]
+    }
+];
+```
+
+### **Creative Arts Cluster**
+```typescript
+const creativeUsers = [
+    {
+        id: 'user-creative-1',
+        name: 'Emma Rodriguez',
+        email: 'emma.rodriguez@example.com', 
+        interests: ['painting', 'art galleries', 'creative workshops', 'design'],
+        location: { lat: 40.7265, lng: -73.9942 }, // SoHo area
+        messages: [
+            "I'm an artist and love visiting galleries and museums",
+            "Looking for creative workshops and art classes",
+            "Interested in design thinking and creative collaboration"
+        ]
+    },
+    {
+        id: 'user-creative-2',
+        name: 'David Kim',
+        email: 'david.kim@example.com',
+        interests: ['photography', 'film', 'documentary', 'visual storytelling'],
+        location: { lat: 40.7589, lng: -73.9851 }, // Midtown area
+        messages: [
+            "I'm a photographer and filmmaker",
+            "Looking for film screenings and photography meetups",
+            "Interested in documentary storytelling and visual arts"
+        ]
+    }
+];
+```
+
+### **Technology & Innovation Cluster**
+```typescript
+const techUsers = [
+    {
+        id: 'user-tech-1',
+        name: 'Alex Thompson',
+        email: 'alex.thompson@example.com',
+        interests: ['programming', 'AI', 'startups', 'tech meetups'],
+        location: { lat: 40.7505, lng: -73.9934 }, // Chelsea area
+        messages: [
+            "I'm a software engineer working on AI projects",
+            "Looking for tech meetups and startup events",
+            "Interested in machine learning and emerging technologies"
+        ]
+    },
+    {
+        id: 'user-tech-2',
+        name: 'Priya Patel',
+        email: 'priya.patel@example.com',
+        interests: ['data science', 'analytics', 'business intelligence', 'tech networking'],
+        location: { lat: 40.7265, lng: -73.9942 }, // Financial District area
+        messages: [
+            "I work in data science and love analytics",
+            "Looking for data science meetups and networking events",
+            "Interested in business intelligence and data visualization"
+        ]
+    }
+];
+```
+
+### **Food & Dining Cluster**
+```typescript
+const foodUsers = [
+    {
+        id: 'user-food-1',
+        name: 'Carlos Mendez',
+        email: 'carlos.mendez@example.com',
+        interests: ['cooking', 'restaurants', 'food culture', 'culinary arts'],
+        location: { lat: 40.7265, lng: -73.9942 }, // East Village area
+        messages: [
+            "I'm a foodie and love trying new restaurants",
+            "Looking for cooking classes and food tours",
+            "Interested in different cuisines and culinary techniques"
+        ]
+    },
+    {
+        id: 'user-food-2',
+        name: 'Lisa Wang',
+        email: 'lisa.wang@example.com',
+        interests: ['vegan cooking', 'healthy eating', 'sustainable food', 'plant-based'],
+        location: { lat: 40.7589, lng: -73.9851 }, // Upper West Side area
+        messages: [
+            "I'm passionate about vegan and plant-based cooking",
+            "Looking for vegan restaurants and cooking workshops",
+            "Interested in sustainable food practices and healthy eating"
+        ]
+    }
+];
+```
+
+### **Music & Entertainment Cluster**
+```typescript
+const musicUsers = [
+    {
+        id: 'user-music-1',
+        name: 'Jordan Smith',
+        email: 'jordan.smith@example.com',
+        interests: ['live music', 'jazz', 'concerts', 'music venues'],
+        location: { lat: 40.7265, lng: -73.9942 }, // Greenwich Village area
+        messages: [
+            "I love live music and jazz performances",
+            "Looking for intimate music venues and jazz clubs",
+            "Interested in discovering new artists and music genres"
+        ]
+    },
+    {
+        id: 'user-music-2',
+        name: 'Nina Garcia',
+        email: 'nina.garcia@example.com',
+        interests: ['dancing', 'salsa', 'latin music', 'dance classes'],
+        location: { lat: 40.7505, lng: -73.9934 }, // Washington Heights area
+        messages: [
+            "I love dancing, especially salsa and latin music",
+            "Looking for dance classes and latin music venues",
+            "Interested in cultural dance events and music festivals"
+        ]
+    }
+];
+```
+
+## Implementation Plan
+
+### **Step 1: Create Seed Users Script**
+**File**: `scripts/seed-users.ts`
+
+**Functions to implement**:
+- `createMockUsers()` - Create diverse user profiles
+- `generateUserMessages(user: MockUser)` - Generate realistic system messages
+- `insertUsersWithMessages()` - Insert users and trigger message processing
+- `validateUserCreation()` - Verify users were created successfully
+
+### **Step 2: Message Generation Strategy**
+**File**: `scripts/seed-users.ts`
+
+**Message generation approach**:
+1. **System messages** - Welcome and onboarding messages
+2. **User interest messages** - Messages that reflect user interests
+3. **Interaction messages** - Messages that would trigger summary generation
+4. **Timing** - Messages spread across different dates
+
+**Message structure**:
+```typescript
+interface MockMessage {
+    role: 'system' | 'user' | 'assistant';
+    content: string;
+    createdAt: Date;
+}
+```
+
+### **Step 3: Database Operations**
+**File**: `scripts/seed-users.ts`
+
+**Database operations**:
+- Insert users with basic profile data
+- Insert system messages for each user
+- Insert user interest messages
+- Trigger summary generation (if needed)
+- Verify data integrity
+
+### **Step 4: Validation & Testing**
+**File**: `scripts/seed-users.ts`
+
+**Validation checks**:
+- All users created successfully
+- Messages inserted correctly
+- User summaries generated
+- Embeddings created
+- Database constraints satisfied
+
+## Technical Implementation
+
+### **Mock User Data Structure**
+```typescript
+interface MockUser {
+    id: string;
+    name: string;
+    email: string;
+    interests: string[];
+    location: { lat: number; lng: number };
+    messages: string[];
+    image?: string;
+}
+```
+
+### **Database Insertion Strategy**
+```typescript
+// 1. Insert users
+await db.insert(user).values(mockUsers.map(u => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    location: u.location,
+    // Other fields with defaults
+})));
+
+// 2. Insert messages for each user
+for (const mockUser of mockUsers) {
+    const messages = generateUserMessages(mockUser);
+    await db.insert(message).values(messages.map(m => ({
+        userId: mockUser.id,
+        role: m.role,
+        content: m.content,
+        createdAt: m.createdAt
+    })));
+}
+```
+
+### **Message Generation Logic**
+```typescript
+function generateUserMessages(mockUser: MockUser): MockMessage[] {
+    const messages: MockMessage[] = [];
+    
+    // System welcome message
+    messages.push({
+        role: 'system',
+        content: `Welcome ${mockUser.name}! I'm here to help you discover amazing events in your area.`,
+        createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) // 7 days ago
+    });
+    
+    // User interest messages
+    mockUser.messages.forEach((msg, index) => {
+        messages.push({
+            role: 'user',
+            content: msg,
+            createdAt: new Date(Date.now() - (6 - index) * 24 * 60 * 60 * 1000)
+        });
+    });
+    
+    // Assistant responses
+    messages.push({
+        role: 'assistant',
+        content: `Based on your interests in ${mockUser.interests.join(', ')}, I can help you find events that match your preferences.`,
+        createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000) // 1 day ago
+    });
+    
+    return messages;
+}
+```
+
+## Success Criteria
+
+### **Functional Requirements**
+- ✅ 10+ diverse users created with realistic profiles
+- ✅ Users distributed across different interest clusters
+- ✅ System messages generated for each user
+- ✅ User interest messages reflect their declared interests
+- ✅ Database integrity maintained
+- ✅ Users ready for clustering and event generation
+
+### **Data Quality Requirements**
+- ✅ Realistic names and email addresses
+- ✅ Diverse geographic locations across NYC
+- ✅ Varied interest profiles that will create distinct clusters
+- ✅ Messages that will trigger meaningful user summaries
+- ✅ Proper timestamps for message history
+
+### **Testing Requirements**
+- ✅ Full pipeline test runs successfully
+- ✅ User clustering generates multiple clusters
+- ✅ Pseudo-events are generated from user clusters
+- ✅ Enhanced venue data is captured and displayed
+- ✅ No database constraint violations
+
+## Usage
+
+### **Development Setup**
+```bash
+# Run the seed script
+npm run seed:users
+
+# Verify data was created
+npm run test:full-pipeline
+```
+
+### **Script Commands**
+```bash
+# Add to package.json
+"scripts": {
+    "seed:users": "npx tsx scripts/seed-users.ts",
+    "test:with-seed": "npm run seed:users && npm run test:full-pipeline"
+}
+```
+
+## Future Enhancements
+
+### **Phase 2: Advanced User Profiles**
+- More diverse user types (different ages, backgrounds)
+- Users with overlapping interests (edge cases)
+- Users with specific location preferences
+- Users with different activity levels
+
+### **Phase 3: Dynamic Data**
+- Users that update their interests over time
+- Users with different interaction patterns
+- Users with varying levels of engagement
+
+### **Phase 4: Realistic Scenarios**
+- Users with conflicting interests
+- Users with seasonal preferences
+- Users with budget constraints
+- Users with accessibility needs
+
+## Risk Assessment
+
+### **Low Risk**
+- **Data quality**: Mock data is controlled and predictable
+- **Database performance**: Small dataset, minimal impact
+- **Schema compatibility**: Using existing schema structure
+
+### **Medium Risk**
+- **Message processing**: Need to ensure summaries are generated
+- **Embedding generation**: May require manual trigger
+- **Cluster quality**: Need to verify clusters are meaningful
+
+### **Mitigation Strategies**
+- **Validation**: Comprehensive checks after data insertion
+- **Fallbacks**: Manual summary generation if needed
+- **Testing**: Full pipeline validation after seeding 

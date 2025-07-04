@@ -21,6 +21,11 @@ export interface VenueCandidate {
     rating?: number;
     priceLevel?: number;
     score?: number;
+    // ✅ ADD new fields for enhanced venue data
+    formattedAddress?: string;
+    googleMapsUri?: string;
+    primaryType?: string;
+    primaryTypeDisplayName?: string;
 }
 
 /**
@@ -115,7 +120,11 @@ export async function searchText(params: VenueSearchParams): Promise<VenueCandid
                         'places.location',
                         'places.types',
                         'places.rating',
-                        'places.priceLevel'
+                        'places.priceLevel',
+                        'places.formattedAddress',    // ✅ ADD - Critical for directions
+                        'places.googleMapsUri',       // ✅ ADD - Easy navigation
+                        'places.primaryType',         // ✅ ADD - Better categorization
+                        'places.primaryTypeDisplayName' // ✅ ADD - Human-readable type
                     ].join(',')
                 }
             }

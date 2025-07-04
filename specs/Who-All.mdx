@@ -1,131 +1,245 @@
-MVP Tech Spec: Chat-Driven Event Recommender
-📌 Product Summary
-An app where NYC users chat with a friendly AI bot that gets to know them over time. From those chats, the system builds a running interest profile per user, generates embeddings from that profile, and recommends in-person events created automatically when enough users share compatible interests.
+# Who-All: Event Generation System
 
-🧑‍💻 Core User Flow
-User signs up (accounts required).
+## Overview
 
-User chats with the AI assistant — freeform conversation but steered to extract interests.
+Who-All is an intelligent event generation system that creates personalized events for users based on their interests, locations, and social connections. The system uses AI-powered clustering, natural language processing, and Google Places Text Search to generate relevant events with optimal venues.
 
-Bot builds a running interest summary from the chats.
+## System Architecture
 
-System embeds that summary into a vector representation.
+### Core Components
 
-Event descriptions are also embedded.
+1. **User Interest Analysis**
+   - Extracts and embeds user interests using OpenAI embeddings
+   - Clusters users by interest similarity using HDBSCAN
+   - Identifies centroid users for event generation
 
-Users are matched to events by semantic similarity between their interest embedding and the event embedding.
+2. **Event Generation Pipeline**
+   - Generates event descriptions using OpenAI GPT
+   - Extracts venue type queries from descriptions
+   - Creates pseudo-events with location and metadata
 
-Events are recommended in-app, based on a confidence threshold and location.
+3. **Venue Selection System**
+   - Uses Google Places Text Search API for natural language venue queries
+   - Implements semantic scoring for venue selection
+   - Considers venue type match, rating, and distance
 
-Users can see number of interested attendees and opt in or ignore events.
+4. **Event Recommendation Engine**
+   - Matches users to events using embedding similarity
+   - Provides personalized event recommendations
+   - Tracks user interactions and feedback
 
-⚙️ Components
-🧠 AI Assistant
-Uses GPT to engage in friendly, casual interest-finding conversations.
+## Data Models
 
-Periodically summarizes user interests (triggered manually, or after meaningful input).
-
-Summary is a natural-language paragraph or bullet list.
-
-📝 Interest Summary
-GPT-generated string updated incrementally.
-
-Example: "Loves '90s comedy films, interested in tai chi and meditation, dislikes loud parties, lives in Bushwick, curious about printmaking."
-
-📐 Embedding Engine
-Uses OpenAI (or equivalent) embedding model (e.g., text-embedding-3-small) to turn:
-
-Interest summaries → user vectors
-
-Event descriptions → event vectors
-
-Vectors stored in the DB as float[].
-
-🎯 Matching Logic
-Cosine similarity used to compare user vector ↔ event vectors.
-
-Events recommended if:
-
-similarity > threshold (e.g., 0.85)
-
-event is in public NYC location
-
-Matching run on a schedule (e.g., daily) or triggered manually.
-
-📅 Event Generator
-App auto-generates events based on interest clusters.
-
-Public space only, one-off events for MVP.
-
-Event includes:
-
-Title, Description, Date, Location
-
-Generated based on user interest clusters + public places
-
-Embedded on creation
-
-🧱 Data Models (simplified)
-ts
-Copy
-Edit
-User {
-  id: string
-  name: string
-  location: string
-  interestSummary: string
-  interestEmbedding: float[]
-  chatHistory: Message[]  // optional, partial log
-  createdAt: Date
+### User Model
+```typescript
+interface User {
+    id: string;
+    email: string;
+    name: string;
+    interests: string;           // Natural language interest description
+    interestEmbedding: number[]; // 1536-dimensional embedding
+    location: {
+        latitude: number;
+        longitude: number;
+    };
+    createdAt: Date;
+    updatedAt: Date;
 }
+```
 
-Event {
-  id: string
-  title: string
-  description: string
-  location: string
-  date: Date
-  creator: "system"
-  eventEmbedding: float[]
-  interestedUserIds: string[]
-  createdAt: Date
+### PseudoEvent Model
+```typescript
+interface PseudoEvent {
+    title: string;                    // e.g. "Rock Climbing Meetup"
+    description: string;              // Event description
+    categories: string[];             // Event categories: ["fitness", "social"]
+    targetLocation: {
+        center: { lat: number; lng: number };
+        radiusMeters: number;         // e.g. 5000 (5km)
+    };
+    venueTypeQuery: string;           // e.g. "rock climbing gym", "coffee shop"
+    clusterUserIds: string[];         // Users in this interest cluster
+    generatedFrom: {
+        centroidUserIds: string[];    // Top users used for generation
+        clusterId: string;            // HDBSCAN cluster identifier
+    };
 }
-🔐 Privacy & Data
-Accounts required.
+```
 
-Users may delete their account, which deletes:
+### Event Model
+```typescript
+interface Event {
+    id: string;
+    title: string;
+    description: string;
+    categories: string[];
+    date: Date;
+    location: {
+        lat: number;
+        lng: number;
+        neighborhood?: string;
+    };
+    venue?: {
+        id: string;
+        name: string;
+        types: string[];
+        rating?: number;
+        priceLevel?: number;
+    };
+    venueRating?: number;
+    venuePriceLevel?: number;
+    embedding: number[];              // Event description embedding
+    createdAt: Date;
+    updatedAt: Date;
+}
+```
 
-Chat history
+## Event Generation Process
 
-Summary
+### 1. User Clustering
+- **Input**: Users with interest embeddings
+- **Process**: HDBSCAN clustering with cosine similarity
+- **Output**: Interest-based user clusters
 
-Embedding
+### 2. Event Description Generation
+- **Input**: Centroid users from each cluster
+- **Process**: OpenAI GPT generates event descriptions
+- **Output**: Natural language event descriptions
 
-Profile
+### 3. Venue Type Extraction
+- **Input**: Event descriptions
+- **Process**: OpenAI GPT extracts venue type queries
+- **Output**: Specific venue queries (e.g., "coffee shop", "rock climbing gym")
 
-Interest tags and embeddings are persistent while user is active.
+### 4. Venue Selection
+- **Input**: Venue type query + location
+- **Process**: Google Places Text Search + semantic scoring
+- **Output**: Best matching venue
 
-User visibility is limited; other attendees may only be seen based on privacy settings.
+### 5. Event Creation
+- **Input**: Pseudo-event + selected venue
+- **Process**: Combine data and generate final event
+- **Output**: Complete event with venue details
 
-🚫 Out of Scope for MVP
-Availability/calendar scheduling
+## Venue Selection Algorithm
 
-Group chat or event coordination tools
+### Google Places Text Search
+- Uses natural language queries (e.g., "rock climbing gym")
+- Location-biased search within specified radius
+- Returns up to 20 candidate venues
 
-Hosting tools / user-submitted events
+### Semantic Scoring
+The venue selection uses a weighted scoring system:
 
-Friends system or user profile browsing
+1. **Venue Type Match (40%)**: Semantic similarity between query and venue
+2. **Rating Score (20%)**: Normalized venue rating (0-5 scale)
+3. **Distance Score (20%)**: Proximity to target location
+4. **Price Level (20%)**: Affordability consideration
 
-Notifications beyond basic recommendations
+### Scoring Formula
+```
+Final Score = (0.4 × VenueTypeScore) + (0.2 × RatingScore) + (0.2 × DistanceScore) + (0.2 × PriceScore)
+```
 
-Vector store (for now — using DB-stored vectors and in-memory similarity)
+## API Endpoints
 
-✅ MVP Success Criteria
-Users feel like the bot understands their interests.
+### Event Generation
+- `POST /api/events/generate` - Generate new events from user clusters
+- `POST /api/events/recommendations` - Get personalized event recommendations
+- `GET /api/events` - List all events
 
-Events are relevant and not hallucinated.
+### User Management
+- `POST /api/users/interests` - Update user interests
+- `GET /api/users/recommendations` - Get user-specific recommendations
 
-At least some events get user signups, even from a small seed group.
+### Chat Integration
+- `POST /api/chat/summarize` - Summarize chat conversations
+- `POST /api/chat/analyze` - Analyze chat for event opportunities
 
-The interest embedding system scales better than manual tags.
+## Configuration
+
+### Event Generation Settings
+```typescript
+const EVENT_CONFIG = {
+    DEFAULT_RADIUS_METERS: 5000,      // 5km search radius
+    DEFAULT_ATTENDEES: 20,            // Default group size
+    MIN_CLUSTER_SIZE: 20,             // Minimum users per cluster
+    MAX_EVENTS_PER_CLUSTER: 1,        // Events per cluster
+    VENUE_SEARCH_LIMIT: 20,           // Max venues to search
+    VENUE_ANALYSIS_LIMIT: 10,         // Max venues to score
+};
+```
+
+### Venue Scoring Settings
+```typescript
+const VENUE_SCORING_CONFIG = {
+    VENUE_TYPE_WEIGHT: 0.4,           // Weight for semantic match
+    RATING_WEIGHT: 0.2,               // Weight for venue rating
+    DISTANCE_WEIGHT: 0.2,             // Weight for distance
+    PRICE_WEIGHT: 0.2,                // Weight for price level
+    SCORE_THRESHOLD: 0.3,             // Minimum acceptable score
+    VENUE_IDEAL_SCORE_THRESHOLD: 0.9, // Ideal score threshold
+    VENUE_MAX_DETAIL_FETCHES: 10,     // Max venues to analyze
+};
+```
+
+## Testing
+
+### Test Coverage
+- **Unit Tests**: Core functions and utilities
+- **Integration Tests**: API endpoints and database operations
+- **End-to-End Tests**: Complete event generation pipeline
+
+### Test Scripts
+```bash
+npm run test:all                    # Run all tests
+npm run test:venue-search           # Test venue search functionality
+npm run test:event-generation       # Test event generation pipeline
+npm run test:chat-summarization     # Test chat analysis
+```
+
+## Deployment
+
+### Environment Variables
+```bash
+OPENAI_API_KEY=your_openai_key
+GOOGLE_PLACES_API_KEY=your_google_key
+DATABASE_URL=your_database_url
+```
+
+### Database Migrations
+```bash
+npm run db:generate    # Generate new migrations
+npm run db:migrate     # Apply migrations
+npm run db:studio      # Open database studio
+```
+
+## Performance Considerations
+
+### Optimization Strategies
+1. **Embedding Caching**: Cache user and event embeddings
+2. **Batch Processing**: Process multiple events concurrently
+3. **API Rate Limiting**: Respect Google Places API limits
+4. **Database Indexing**: Optimize queries with proper indexes
+
+### Monitoring
+- Track API response times
+- Monitor embedding generation costs
+- Log venue selection success rates
+- Measure user engagement metrics
+
+## Future Enhancements
+
+### Planned Features
+1. **Multi-language Support**: International venue search
+2. **Advanced Filtering**: Price, accessibility, and preference filters
+3. **Real-time Updates**: Live venue availability checking
+4. **Social Integration**: Event sharing and RSVP management
+5. **Analytics Dashboard**: Event performance metrics
+
+### Technical Improvements
+1. **Vector Database**: Optimize embedding storage and search
+2. **Caching Layer**: Redis for frequently accessed data
+3. **Background Jobs**: Async event generation processing
+4. **API Versioning**: Maintain backward compatibility
 

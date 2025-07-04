@@ -1,0 +1,488 @@
+# Event Database Integration Specification
+
+## Overview
+This document outlines the implementation plan for saving AI-generated events from the full pipeline into the database. The system currently generates events through user clustering → pseudo-event generation → real event creation with venue matching, but these events are not persisted to the database.
+
+## Current State
+- ✅ User clustering and interest analysis
+- ✅ Pseudo-event generation with AI
+- ✅ Real event creation with Google Places venue matching
+- ✅ Full pipeline test working end-to-end
+- ❌ Events not saved to database
+- ❌ No database persistence layer for events
+
+## Scope
+
+### What We Need to Implement
+
+1. **Data Transformation Layer**
+   - Convert `Event` objects from `event-generation.ts` to database-compatible `EventInsert` types
+   - Handle type conversions (Date objects, JSON serialization)
+   - Map venue data to database schema fields
+
+2. **Database Operations**
+   - Create event insertion functions
+   - Handle batch insertions for multiple events
+   - Implement proper error handling and rollback
+   - Add transaction support for atomic operations
+
+3. **Validation & Sanitization**
+   - Validate event data before insertion
+   - Ensure required fields are present
+   - Sanitize text fields (title, description)
+   - Validate location coordinates
+
+4. **Integration Points**
+   - Modify full pipeline to save events
+   - Add event saving to API endpoints
+   - Update test scripts to verify database persistence
+
+### What We Don't Need to Implement (Yet)
+- Event updates or deletions
+- Complex event relationships
+- Event search or filtering
+- User event interactions (RSVPs, etc.)
+- Event embedding generation (can be added later)
+
+## Implementation Steps
+
+### Step 0: Enhanced Data Capture (CRITICAL)
+**File**: `lib/google-places.ts`
+
+**Update Google Places API field mask**:
+```typescript
+'X-Goog-FieldMask': [
+    'places.id',
+    'places.displayName', 
+    'places.location',
+    'places.types',
+    'places.rating',
+    'places.priceLevel',
+    'places.formattedAddress',    // ✅ ADD - Critical for directions
+    'places.googleMapsUri',       // ✅ ADD - Easy navigation
+    'places.primaryType',         // ✅ ADD - Better categorization
+    'places.primaryTypeDisplayName' // ✅ ADD - Human-readable type
+].join(',')
+```
+
+**File**: `lib/event-generation.ts`
+
+**Update Event interface and venue mapping**:
+```typescript
+export interface Event {
+    // ... existing fields ...
+    venue?: {
+        placeId: string;
+        name: string;
+        types: string[];
+        formattedAddress?: string;    // ✅ ADD
+        googleMapsUri?: string;       // ✅ ADD
+        primaryType?: string;         // ✅ ADD
+        primaryTypeDisplayName?: string; // ✅ ADD
+    };
+    // ... rest of fields ...
+}
+
+// Update venueToEventVenue function
+function venueToEventVenue(venue: VenueCandidate) {
+    return {
+        placeId: venue.id,
+        name: venue.displayName.text,
+        types: venue.types,
+        formattedAddress: venue.formattedAddress,
+        googleMapsUri: venue.googleMapsUri,
+        primaryType: venue.primaryType,
+        primaryTypeDisplayName: venue.primaryTypeDisplayName
+    };
+}
+```
+
+**File**: `lib/google-places.ts`
+
+**Update VenueCandidate interface**:
+```typescript
+export interface VenueCandidate {
+    id: string;
+    displayName: { text: string };
+    location: { latitude: number; longitude: number };
+    types: string[];
+    rating?: number;
+    priceLevel?: number;
+    score?: number;
+    // ✅ ADD new fields
+    formattedAddress?: string;
+    googleMapsUri?: string;
+    primaryType?: string;
+    primaryTypeDisplayName?: string;
+}
+```
+
+### Step 1: Create Event Database Service
+**File**: `lib/db/events.ts`
+
+**Functions to implement**:
+- `insertEvent(event: Event): Promise<string>` - Insert single event, return event ID
+- `insertEvents(events: Event[]): Promise<string[]>` - Batch insert events
+- `getEventById(id: string): Promise<Event | null>` - Retrieve event by ID
+- `getEventsByDateRange(start: Date, end: Date): Promise<Event[]>` - Get events in date range
+
+**Key considerations**:
+- Handle UUID generation for event IDs
+- Proper error handling with meaningful messages
+- Transaction support for batch operations
+- Type safety with Drizzle ORM
+- Enhanced venue data storage in JSONB
+
+### Step 2: Data Transformation Utilities
+**File**: `lib/db/event-transformers.ts`
+
+**Functions to implement**:
+- `eventToInsert(event: Event): EventInsert` - Convert Event to database insert format
+- `validateEvent(event: Event): ValidationResult` - Validate event data
+- `sanitizeEventText(text: string): string` - Clean and sanitize text fields
+- `validateVenueData(venue: any): boolean` - Validate enhanced venue data
+
+**Validation rules**:
+- Title: required, 1-200 characters
+- Description: required, 1-2000 characters
+- Date: required, must be in the future
+- Location: required, valid lat/lng coordinates
+- Categories: required, non-empty array
+- Venue data: optional but must be valid if present
+- **NEW**: Venue formattedAddress: should be present if venue exists
+- **NEW**: Venue googleMapsUri: should be valid URL if present
+
+### Step 3: Update Full Pipeline Integration
+**File**: `scripts/test-full-pipeline.ts`
+
+**Changes needed**:
+- Import database service functions
+- Add event saving after successful generation
+- Add verification that events were saved
+- Add cleanup of test events after completion
+
+**New flow**:
+1. Generate pseudo-events
+2. Convert to real events with venues
+3. **NEW**: Save events to database
+4. **NEW**: Verify events were saved correctly
+5. **NEW**: Clean up test data
+
+### Step 4: API Endpoint Integration
+**File**: `app/api/events/+api.ts`
+
+**New endpoint to create**:
+- `POST /api/events` - Create new events from pipeline
+- Accept array of events or single event
+- Return created event IDs
+- Handle validation errors gracefully
+
+### Step 5: Enhanced Testing
+**Files**: `tests/test-event-database.test.ts`
+
+**Test scenarios**:
+- Single event insertion
+- Batch event insertion
+- Validation error handling
+- Transaction rollback on errors
+- Data integrity verification
+- Performance with large batches
+
+## Data Capture Analysis & Schema Compatibility
+
+### **Critical Issue: Missing Venue Data**
+
+Our current Google Places API request is missing critical venue information that users need for a complete event experience.
+
+#### **Current API Request Fields**
+```typescript
+'X-Goog-FieldMask': [
+    'places.id',           // ✅ Captured
+    'places.displayName',  // ✅ Captured  
+    'places.location',     // ✅ Captured
+    'places.types',        // ✅ Captured
+    'places.rating',       // ✅ Captured
+    'places.priceLevel'    // ✅ Captured
+]
+```
+
+#### **Missing Critical Fields (Free Pro SKU)**
+```typescript
+// ❌ MISSING - These should be added immediately
+'places.formattedAddress',    // CRITICAL - Users need directions
+'places.googleMapsUri',       // HIGH - Easy navigation
+'places.primaryType',         // MEDIUM - Better categorization
+'places.primaryTypeDisplayName' // MEDIUM - Human-readable type
+```
+
+#### **Missing Enterprise Fields (Future)**
+```typescript
+// ❌ MISSING - Require paid Enterprise SKU
+'places.websiteUri',           // HIGH - Venue website
+'places.regularOpeningHours',  // HIGH - Operating hours
+'places.userRatingCount',      // MEDIUM - Review count
+'places.internationalPhoneNumber' // LOW - Contact info
+```
+
+### **Enhanced Data Capture Strategy**
+
+#### **Step 1: Update Google Places API Request**
+**File**: `lib/google-places.ts`
+
+**Enhanced field mask**:
+```typescript
+'X-Goog-FieldMask': [
+    'places.id',
+    'places.displayName', 
+    'places.location',
+    'places.types',
+    'places.rating',
+    'places.priceLevel',
+    'places.formattedAddress',    // ✅ ADD - Critical for directions
+    'places.googleMapsUri',       // ✅ ADD - Easy navigation
+    'places.primaryType',         // ✅ ADD - Better categorization
+    'places.primaryTypeDisplayName' // ✅ ADD - Human-readable type
+].join(',')
+```
+
+#### **Step 2: Enhanced Venue Data Structure**
+**File**: `lib/event-generation.ts`
+
+**Updated Event interface**:
+```typescript
+export interface Event {
+    // ... existing fields ...
+    venue?: {
+        placeId: string;
+        name: string;
+        types: string[];
+        formattedAddress?: string;    // ✅ ADD
+        googleMapsUri?: string;       // ✅ ADD
+        primaryType?: string;         // ✅ ADD
+        primaryTypeDisplayName?: string; // ✅ ADD
+    };
+    // ... rest of fields ...
+}
+```
+
+#### **Step 3: Database Schema Enhancement**
+**File**: `lib/db/schema.ts`
+
+**Enhanced venue JSONB structure**:
+```typescript
+venue: jsonb("venue"), // Enhanced structure:
+// {
+//   placeId: string,
+//   name: string, 
+//   types: string[],
+//   formattedAddress?: string,    // ✅ ADD
+//   googleMapsUri?: string,       // ✅ ADD
+//   primaryType?: string,         // ✅ ADD
+//   primaryTypeDisplayName?: string // ✅ ADD
+// }
+```
+
+### **Database Schema Compatibility**
+
+#### **Current Event Schema Fields**
+```typescript
+{
+    id: uuid,                    // Auto-generated
+    title: text,                 // ✅ Direct mapping
+    date: timestamp,             // ✅ Direct mapping
+    location: jsonb,             // ✅ Direct mapping
+    description: text,           // ✅ Direct mapping
+    categories: text[],          // ✅ Direct mapping
+    venue: jsonb,                // ✅ Enhanced mapping
+    venueType: text,             // ✅ Direct mapping
+    venueRating: integer,        // ✅ Direct mapping
+    venuePriceLevel: integer,    // ✅ Direct mapping
+    hostId: text,                // ✅ Direct mapping
+    embedding: text,             // ❌ Not generated yet
+    attendeesCount: integer,     // ✅ Default to 0
+    interestedCount: integer,    // ✅ Default to 0
+    createdAt: timestamp,        // ✅ Auto-generated
+    updatedAt: timestamp         // ✅ Auto-generated
+}
+```
+
+#### **Enhanced Mapping from Event Generation**
+```typescript
+// From enhanced event-generation.ts Event interface
+{
+    title: string,               // → event.title
+    description: string,         // → event.description
+    categories: string[],        // → event.categories
+    date: Date,                  // → event.date
+    location: { lat, lng, neighborhood }, // → event.location
+    venue?: { 
+        placeId, name, types,
+        formattedAddress?,       // ✅ NEW - Full address
+        googleMapsUri?,          // ✅ NEW - Maps link
+        primaryType?,            // ✅ NEW - Primary category
+        primaryTypeDisplayName?  // ✅ NEW - Human-readable type
+    },                          // → event.venue (enhanced JSONB)
+    venueType?: string,          // → event.venueType
+    venueRating?: number,        // → event.venueRating
+    venuePriceLevel?: number,    // → event.venuePriceLevel
+    hostId?: string,             // → event.hostId
+    embedding?: string,          // → event.embedding (null for now)
+    attendeesCount: number,      // → event.attendeesCount
+    interestedCount: number      // → event.interestedCount
+}
+```
+
+### **Impact of Missing Data**
+
+#### **❌ HIGH IMPACT - Critical User Needs**
+1. **`formattedAddress`** - Users can't get directions to events
+2. **`googleMapsUri`** - Users can't easily navigate to venues
+3. **`primaryType`** - Less precise venue categorization for recommendations
+
+#### **⚠️ MEDIUM IMPACT - User Experience**
+4. **`primaryTypeDisplayName`** - Less user-friendly venue type display
+5. **`websiteUri`** (Enterprise) - Users can't visit venue websites
+6. **`regularOpeningHours`** (Enterprise) - Can't verify venue availability
+
+#### **✅ LOW IMPACT - Nice to Have**
+7. **`photos`** - Venue visual appeal
+8. **`userRatingCount`** (Enterprise) - Review credibility
+9. **`internationalPhoneNumber`** (Enterprise) - Contact information
+
+## Error Handling Strategy
+
+### Validation Errors
+- **Missing required fields**: Return specific error messages
+- **Invalid data types**: Type conversion errors
+- **Invalid coordinates**: Location validation errors
+- **Future date validation**: Ensure events are in the future
+
+### Database Errors
+- **Connection failures**: Retry logic with exponential backoff
+- **Constraint violations**: Unique constraint handling
+- **Transaction failures**: Rollback and partial success reporting
+- **Performance issues**: Batch size optimization
+
+### API Errors
+- **400 Bad Request**: Validation errors
+- **500 Internal Server Error**: Database errors
+- **503 Service Unavailable**: Database connection issues
+
+## Performance Considerations
+
+### Batch Operations
+- Use batch inserts for multiple events
+- Optimal batch size: 10-50 events per transaction
+- Parallel processing for venue lookups (already implemented)
+
+### Database Optimization
+- Index on `date` field for date range queries
+- Index on `categories` for category-based filtering
+- Consider JSONB indexes for location queries
+
+### Memory Management
+- Stream large event arrays instead of loading all into memory
+- Clean up temporary data after processing
+
+## Success Criteria
+
+### Functional Requirements
+- ✅ Events successfully saved to database
+- ✅ All required fields populated correctly
+- ✅ **Enhanced venue data captured and stored**:
+  - ✅ `formattedAddress` - Full street address for directions
+  - ✅ `googleMapsUri` - Direct link to Google Maps
+  - ✅ `primaryType` - Primary venue category
+  - ✅ `primaryTypeDisplayName` - Human-readable venue type
+- ✅ Venue data properly serialized in JSONB
+- ✅ Date/time handling works correctly
+- ✅ Error handling prevents data corruption
+
+### Performance Requirements
+- ✅ Batch insertion of 50+ events completes in <5 seconds
+- ✅ Single event insertion completes in <100ms
+- ✅ Memory usage remains stable during large operations
+- ✅ Google Places API calls include enhanced fields without performance impact
+
+### Quality Requirements
+- ✅ 100% test coverage for database operations
+- ✅ All validation rules enforced
+- ✅ Enhanced venue data validation
+- ✅ Proper error messages for debugging
+- ✅ Data integrity maintained
+- ✅ **No critical venue information lost**:
+  - ✅ Users can get directions to events
+  - ✅ Users can navigate via Google Maps
+  - ✅ Venue categorization is precise
+
+## Future Enhancements
+
+### Phase 2 (Post-MVP)
+- Event embedding generation and storage
+- Event search and filtering capabilities
+- User event interactions (RSVP, interest)
+- Event recommendations based on user preferences
+- Event update and deletion operations
+
+### Phase 3 (Advanced Features)
+- Event analytics and reporting
+- Event scheduling optimization
+- Integration with external calendar systems
+- Advanced venue matching algorithms
+- Event popularity prediction
+
+## Implementation Timeline
+
+### Day 0: Enhanced Data Capture (CRITICAL)
+- Update Google Places API field mask in `lib/google-places.ts`
+- Enhance VenueCandidate interface with new fields
+- Update Event interface in `lib/event-generation.ts`
+- Update venue mapping functions
+- Test enhanced data capture with full pipeline
+
+### Day 1: Core Database Service
+- Create `lib/db/events.ts`
+- Implement basic CRUD operations
+- Add comprehensive error handling
+- Ensure enhanced venue data storage in JSONB
+
+### Day 2: Data Transformation
+- Create `lib/db/event-transformers.ts`
+- Implement validation logic including enhanced venue data
+- Add sanitization functions
+- Add venue data validation
+
+### Day 3: Pipeline Integration
+- Update full pipeline script
+- Add database saving step
+- Implement verification and cleanup
+- Verify enhanced venue data is captured and stored
+
+### Day 4: Testing & Validation
+- Create comprehensive test suite
+- Performance testing with enhanced API calls
+- Integration testing with full pipeline
+- Validate no critical venue data is lost
+
+### Day 5: API Integration & Documentation
+- Create API endpoints
+- Update documentation
+- Final testing and bug fixes
+- Verify user experience with complete venue data
+
+## Risk Assessment
+
+### High Risk
+- **Data corruption**: Mitigated by validation and transactions
+- **Performance issues**: Mitigated by batch operations and indexing
+- **Type mismatches**: Mitigated by comprehensive type checking
+
+### Medium Risk
+- **API rate limiting**: Google Places API already handled
+- **Database connection issues**: Mitigated by retry logic
+- **Memory leaks**: Mitigated by proper cleanup
+
+### Low Risk
+- **Schema changes**: Minimal impact due to flexible JSONB fields
+- **Timezone issues**: Handled by proper timestamp handling
+- **Text encoding**: Standard UTF-8 handling sufficient 
