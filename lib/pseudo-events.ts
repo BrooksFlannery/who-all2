@@ -12,9 +12,6 @@ export interface PseudoEvent {
         radiusMeters: number;           // e.g. 5000 (5km)
     };
     venueTypeQuery: string;           // e.g. "rock climbing gym", "coffee shop" (precise description)
-    googleVenueTypes: string[];       // e.g. ["gym"], ["cafe", "coffee_shop"] (Google Places API types)
-    venueTypeConfidence: number;      // e.g. 0.85 (confidence in semantic mapping)
-    estimatedAttendees: number;       // Hard-coded to 20 for MVP
     clusterUserIds: string[];         // Users in this interest cluster
     generatedFrom: {
         centroidUserIds: string[];      // Top 5 users used for generation

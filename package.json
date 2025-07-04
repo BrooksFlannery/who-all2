@@ -16,12 +16,18 @@
     "test-google-places": "npx tsx scripts/test-google-places.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:all": "vitest run",
     "test:chat-summarization": "vitest run tests/test-chat-summarization.test.ts",
     "test:api-endpoints": "vitest run tests/test-api-endpoints.test.ts",
     "test:interest-schemas": "vitest run tests/test-interest-schemas.test.ts",
     "test:zod": "vitest run tests/test-zod.test.ts",
     "test:pseudo-events": "vitest run tests/test-pseudo-events.test.ts",
-    "test:all": "vitest run"
+    "test:database-connection": "vitest run tests/test-database-connection.test.ts",
+    "test:recommended-events": "vitest run tests/test-recommended-events.test.ts",
+    "test:event-recommendations": "vitest run tests/test-event-recommendations.test.ts",
+    "test:venue-search": "npx tsx scripts/test-venue-search.ts",
+    "test:event-generation": "npx tsx scripts/test-event-generation.ts",
+    "test:full-pipeline": "npx tsx scripts/test-full-pipeline.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.22",

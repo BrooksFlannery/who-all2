@@ -1,379 +1,291 @@
-# Google Places API Integration Spec for Event Generation
+# Google Places API Integration
 
 ## Overview
-This spec covers the final step in the who-all event generation pipeline: converting pseudo-events (generated from user interest clusters) into real events with actual venues from Google Places API.
 
-## Context in Project Flow
-1. **User Interest Analysis** → System analyzes chat data to build interest profiles
-2. **Pseudo-Event Generation** → Creates event concepts based on interest clusters (not covered here)
-3. **Google Places API** → Finds real venues matching pseudo-event criteria (this spec)
-4. **Real Events** → Stored in existing `event` table with venue data
+The Who-All system uses Google Places Text Search API to find optimal venues for generated events. This integration provides natural language venue search with semantic scoring for venue selection.
 
-## Input: Pseudo-Event Interface
+## API Configuration
+
+### Required Environment Variables
+```bash
+GOOGLE_PLACES_API_KEY=your_google_places_api_key
+```
+
+### API Endpoint
+```
+https://places.googleapis.com/v1/places:searchText
+```
+
+## Venue Search Process
+
+### 1. Text Query Generation
+The system generates natural language venue queries from event descriptions:
+
 ```typescript
-interface PseudoEvent {
-  title: string;                    // e.g. "Rock Climbing Meetup"
-  description: string;              // Event description
-  categories: string[];             // Event categories: ["fitness", "social"]
-  targetLocation: {
-    center: { lat: number; lng: number };
-    radiusMeters: number;           // e.g. 5000 (5km)
-  };
-  venueTypeQuery: string;           // e.g. "rock climbing gym", "coffee shop" (precise description)
-  googleVenueTypes: string[];       // e.g. ["gym"], ["cafe", "coffee_shop"] (Google Places API types)
-  venueTypeConfidence: number;      // e.g. 0.85 (confidence in semantic mapping)
-  estimatedAttendees: number;       // Expected group size
+// Example venue type queries
+"coffee shop"
+"rock climbing gym" 
+"italian restaurant"
+"art gallery"
+"yoga studio"
+```
+
+### 2. API Request Structure
+```typescript
+interface VenueSearchRequest {
+    textQuery: string;           // Natural language query
+    locationBias: {
+        circle: {
+            center: {
+                latitude: number;
+                longitude: number;
+            };
+            radius: number;      // Search radius in meters
+        };
+    };
+    pageSize: number;            // Max results (1-20)
+    rankPreference: 'RELEVANCE'; // Use relevance for text search
 }
 ```
 
-**Note**: The `googleVenueTypes` field is populated by semantic matching against Google Places API types using embeddings. This allows for precise venue type mapping while maintaining the specificity of the original `venueTypeQuery`.
-
-## Database Schema Updates
-### Enhanced Event Table
+### 3. Response Fields
 ```typescript
-export const event = pgTable("event", {
-  // Existing fields...
-  id: uuid("id").defaultRandom().primaryKey(),
-  title: text("title").notNull(),
-  date: timestamp("date", { withTimezone: true }).notNull(),
-  location: jsonb("location").notNull(), // { lat: number, lng: number, neighborhood?: string }
-  description: text("description").notNull(),
-  categories: text("categories").array().notNull(), // Event categories (fitness, social, etc.)
-  
-  // New Google Places fields
-  venue: jsonb("venue"),                    // Google Places venue data
-  venueType: text("venue_type"),            // Google type (gym, restaurant, park)
-  venueRating: integer("venue_rating"),     // Google rating (1-5)
-  venuePriceLevel: integer("venue_price_level"), // Google price level (1-4)
-  
-  // Existing fields...
-  hostId: text("host_id").references(() => user.id),
-  embedding: text("embedding"), // VECTOR(1536)
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-  attendeesCount: integer("attendees_count").default(0).notNull(),
-  interestedCount: integer("interested_count").default(0).notNull(),
-});
-```
-
-### User Location (Simplified Approach)
-```typescript
-// Add to existing user table (already implemented in pseudo-events spec)
-export const user = pgTable("user", {
-  // ... existing fields ...
-  location: jsonb("location"), // { lat: number, lng: number } - nullable
-  // ... rest of existing fields ...
-});
-```
-
-**Note**: Using single location field on user table instead of separate user_location table for MVP simplicity. This avoids complexity while meeting requirements.
-
-## Google Places API Integration
-
-### 1. Search Parameters
-```typescript
-interface VenueSearchParams {
-  pseudoEvent: PseudoEvent;
-  maxResults?: number;        // Default: 20
-  maxDetailFetches?: number;  // Default: 10
-  scoreThreshold?: number;    // Default: 0.5 (0-1)
-  apiKey: string;            // From .env GOOGLE_PLACES_API_KEY
+interface VenueSearchResponse {
+    places: Array<{
+        id: string;
+        displayName: { text: string };
+        location: { latitude: number; longitude: number };
+        types: string[];
+        rating?: number;
+        priceLevel?: number;
+    }>;
 }
 ```
 
-### 2. Venue Selection Strategy
-**Nearby Search Approach**
-- Use Google Places Nearby Search API
-- Requires center + radius (matches our pseudo-event targetLocation)
-- Returns up to 20 results ordered by distance
-- Best for our use case since we have specific target areas
+## Venue Selection Algorithm
 
-**Enhanced Scoring Algorithm**
-- Score = (normalized distance × DISTANCE_WEIGHT) + (normalized rating × RATING_WEIGHT) + (venue type match × VENUE_TYPE_WEIGHT)
-- Distance score: 1 - (candidate index / total candidates)
-- Rating score: (Google rating / 5)
-- Venue type match: Check if venue name/types contain keywords from venueTypeQuery
-- Only venues above scoreThreshold are considered
+### Semantic Scoring System
+The venue selection uses a weighted scoring algorithm:
 
-**Scoring Weights (Global Variables):**
-- `DISTANCE_WEIGHT`: 0.4 (40% weight for distance)
-- `RATING_WEIGHT`: 0.4 (40% weight for venue rating)
-- `VENUE_TYPE_WEIGHT`: 0.2 (20% weight for venue type match)
-- `SCORE_THRESHOLD`: 0.5 (minimum score to consider a venue)
-
-### 3. Implementation Steps
-
-#### 3.1 Nearby Search Call
 ```typescript
-async function searchNearby(params: VenueSearchParams) {
-  const body = {
-    includedTypes: params.pseudoEvent.googleVenueTypes,  // Use semantic-matched types
-    locationRestriction: {
-      circle: {
-        center: params.pseudoEvent.targetLocation.center,
-        radius: params.pseudoEvent.targetLocation.radiusMeters
-      }
-    },
-    maxResultCount: params.maxResults || 20,
-    rankPreference: 'DISTANCE'
-  };
-
-  const res = await axios.post(
-    'https://places.googleapis.com/v1/places:searchNearby',
-    body,
-    {
-      headers: {
-        'X-Goog-Api-Key': params.apiKey,
-        'X-Goog-FieldMask': [
-          'places.id',
-          'places.displayName',
-          'places.location',
-          'places.types'
-        ].join(',')
-      }
-    }
-  );
-  return res.data.places;
+interface VenueScoring {
+    venueTypeWeight: 0.4;    // Semantic similarity (40%)
+    ratingWeight: 0.2;       // Venue rating (20%)
+    distanceWeight: 0.2;     // Proximity (20%)
+    priceWeight: 0.2;        // Price level (20%)
 }
 ```
 
-#### 3.2 Enhanced Scoring with Venue Type Filtering
+### Scoring Process
+
+1. **Venue Type Match (40%)**
+   - Generate embeddings for venue query and venue text
+   - Calculate cosine similarity between embeddings
+   - Fallback to keyword matching if embeddings fail
+
+2. **Rating Score (20%)**
+   - Normalize Google rating (0-5 scale) to 0-1
+   - Default to 0 if no rating available
+
+3. **Distance Score (20%)**
+   - Calculate proximity to target location
+   - Normalize based on search radius
+
+4. **Price Level (20%)**
+   - Consider venue affordability
+   - Normalize Google price level
+
+### Final Score Calculation
 ```typescript
-async function findBestVenue(params: VenueSearchParams) {
-  const candidates = await searchNearby(params);
-  
-  // Score each candidate with venue type filtering
-  for (let i = 0; i < candidates.length; i++) {
-    const candidate = candidates[i];
+finalScore = (0.4 × venueTypeScore) + 
+             (0.2 × ratingScore) + 
+             (0.2 × distanceScore) + 
+             (0.2 × priceScore);
+```
+
+## Implementation Details
+
+### Core Functions
+
+#### `searchText(params: VenueSearchParams)`
+Performs Google Places Text Search with location bias.
+
+```typescript
+export async function searchText(params: VenueSearchParams): Promise<VenueCandidate[]> {
+    const body = {
+        textQuery: params.pseudoEvent.venueTypeQuery,
+        locationBias: {
+            circle: {
+                center: {
+                    latitude: params.pseudoEvent.targetLocation.center.lat,
+                    longitude: params.pseudoEvent.targetLocation.center.lng
+                },
+                radius: EVENT_CONFIG.DEFAULT_RADIUS_METERS
+            }
+        },
+        pageSize: params.maxResults || 20,
+        rankPreference: 'RELEVANCE'
+    };
     
-    // Calculate venue type match score
-    const venueTypeScore = calculateVenueTypeMatch(
-      candidate.displayName.text,
-      candidate.types,
-      params.pseudoEvent.venueTypeQuery
-    );
+    // Make API request and return candidates
+}
+```
+
+#### `findBestVenue(params: VenueSearchParams)`
+Scores and selects the best venue from candidates.
+
+```typescript
+export async function findBestVenue(params: VenueSearchParams): Promise<VenueCandidate | null> {
+    const candidates = await searchText(params);
     
-    // Score = (normalized distance * DISTANCE_WEIGHT) + (normalized rating * RATING_WEIGHT) + (venue type match * VENUE_TYPE_WEIGHT)
-    const distanceScore = 1 - i / Math.max(candidates.length - 1, 1);
-    const ratingScore = (candidate.rating ?? 0) / 5;
-    const score = DISTANCE_WEIGHT * distanceScore + RATING_WEIGHT * ratingScore + VENUE_TYPE_WEIGHT * venueTypeScore;
-
-    candidate.score = score;
-
-    if (score >= (params.scoreThreshold ?? SCORE_THRESHOLD)) {
-      return candidate;
+    // Score each candidate
+    for (const candidate of candidates.slice(0, maxFetches)) {
+        const venueTypeScore = await calculateVenueTypeMatch(
+            candidate.displayName.text,
+            candidate.types,
+            params.pseudoEvent.venueTypeQuery
+        );
+        
+        const distanceScore = calculateDistanceScore(candidate, params);
+        const ratingScore = (candidate.rating ?? 0) / 5;
+        
+        candidate.score = (0.4 * venueTypeScore) + 
+                         (0.2 * ratingScore) + 
+                         (0.2 * distanceScore);
     }
-  }
-
-  return null; // no venue met criteria
-}
-
-function calculateVenueTypeMatch(venueName: string, venueTypes: string[], targetQuery: string): number {
-  const name = venueName.toLowerCase();
-  const query = targetQuery.toLowerCase();
-  
-  // Check if venue name contains target keywords
-  const nameMatch = query.split(' ').some(word => 
-    word.length > 3 && name.includes(word)
-  ) ? 1.0 : 0.0;
-  
-  // Check if venue types are relevant
-  const typeMatch = venueTypes.some(type => 
-    query.includes(type.replace('_', ' '))
-  ) ? 0.8 : 0.0;
-  
-  return Math.max(nameMatch, typeMatch);
+    
+    return selectBestCandidate(candidates);
 }
 ```
 
-### 4. Event Generation Process
+### Semantic Matching
+
+#### `calculateVenueTypeMatch()`
+Uses embeddings to calculate semantic similarity between venue query and venue.
+
 ```typescript
-async function generateRealEvent(pseudoEvent: PseudoEvent): Promise<Event | null> {
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  
-  // Step 1: Find best venue using enhanced scoring
-  const venue = await findBestVenue({
-    pseudoEvent,
-    apiKey
-  });
-  
-  if (!venue) return null;
-  
-  // Step 2: Generate random time (MVP - timing logic to be refined later)
-  const eventTime = generateRandomTime();
-  
-  // Step 3: Create real event
-  return {
-    title: pseudoEvent.title,
-    description: pseudoEvent.description,
-    categories: pseudoEvent.categories,
-    date: eventTime,
-    location: {
-      lat: venue.location.latitude,
-      lng: venue.location.longitude,
-      neighborhood: extractNeighborhood(venue.displayName.text)
-    },
-    venue: {
-      placeId: venue.id,
-      name: venue.displayName.text,
-      types: venue.types
-    },
-    venueType: venue.types[0],
-    venueRating: venue.rating,
-    venuePriceLevel: venue.priceLevel,
-    hostId: null, // System-generated
-    embedding: null, // Generated after creation
-    attendeesCount: 0,
-    interestedCount: 0
-  };
+async function calculateVenueTypeMatch(
+    venueName: string, 
+    venueTypes: string[], 
+    targetQuery: string
+): Promise<number> {
+    const queryEmbedding = await generateVenueEmbedding(targetQuery);
+    const venueText = `${venueName} ${venueTypes.join(' ')}`;
+    const venueEmbedding = await generateVenueEmbedding(venueText);
+    
+    return cosineSimilarity(queryEmbedding, venueEmbedding);
 }
 ```
 
-## API Integration Notes
+## Configuration
 
-**Note**: Event generation is handled through the existing pseudo-event generation pipeline and direct function calls. No additional API endpoints are needed for the MVP implementation.
-
-## Cost Analysis
-- **Free Tier**: 5,000 Search + 5,000 Details/month
-- **Per Event**: 1 Nearby Search + up to 10 Details
-- **Monthly Budget**: ~330 API calls for 1 event/day with 10 venue checks
-- **Cost**: Fully covered by free tier for MVP
-
-## Environment Setup
-Add to `.env`:
-```
-GOOGLE_PLACES_API_KEY=your_api_key_here
-```
-
-## Key Implementation Notes
-
-### 1. **Global Configuration Variables**
+### Search Parameters
 ```typescript
-// Venue scoring weights (should sum to 1.0)
-export const DISTANCE_WEIGHT = 0.4;      // 40% weight for distance
-export const RATING_WEIGHT = 0.4;        // 40% weight for venue rating  
-export const VENUE_TYPE_WEIGHT = 0.2;    // 20% weight for venue type match
-
-// Venue selection thresholds
-export const SCORE_THRESHOLD = 0.5;      // Minimum score to consider a venue
-export const VENUE_TYPE_MATCH_THRESHOLD = 0.3; // Minimum venue type match score
-
-// Search parameters
-export const DEFAULT_MAX_RESULTS = 20;   // Default max venues to search
-export const DEFAULT_MAX_DETAIL_FETCHES = 10; // Default max venues to check details
+const VENUE_SEARCH_CONFIG = {
+    DEFAULT_RADIUS_METERS: 5000,      // 5km search radius
+    MAX_RESULTS: 20,                  // Max venues per search
+    MAX_ANALYSIS: 10,                 // Max venues to score
+    SCORE_THRESHOLD: 0.3,             // Minimum acceptable score
+    IDEAL_SCORE_THRESHOLD: 0.9,       // Ideal score threshold
+};
 ```
 
-### 2. **Semantic Venue Type Matching**
-- Pseudo-events now include `googleVenueTypes` field populated by semantic matching
-- Uses embeddings to find closest Google Places API types
-- Maintains specificity of original `venueTypeQuery` for post-filtering
-- Confidence scoring helps adjust search parameters
+### Field Mask
+```typescript
+const FIELD_MASK = [
+    'places.id',
+    'places.displayName',
+    'places.location',
+    'places.types',
+    'places.rating',
+    'places.priceLevel'
+].join(',');
+```
 
-### 2. **Enhanced Venue Selection**
-- Distance + rating + venue type match scoring algorithm
-- Post-filtering using precise venue type query
-- Configurable thresholds for quality control
-- Graceful fallback when no suitable venues found
+## Error Handling
 
-### 3. **Data Flow**
-- Pseudo-events from clustering pipeline with semantic venue types
-- Real venues from Google Places API using matched types
-- Enhanced event records with venue metadata
-- Maintains existing event table structure
+### API Error Responses
+```typescript
+try {
+    const response = await axios.post(API_URL, body, { headers });
+    return response.data.places || [];
+} catch (error: any) {
+    console.error('Google Places API search failed:', error.response?.data || error.message);
+    throw new Error(`Venue search failed: ${error.response?.data?.error?.message || error.message}`);
+}
+```
 
-### 4. **Location Handling**
-- Uses simplified user location (single JSONB field)
-- Default to Manhattan for users without location
-- Cluster centroids calculated from user locations
-- 5km radius for venue search (configurable)
+### Fallback Strategies
+1. **Embedding Failure**: Fallback to keyword matching
+2. **API Failure**: Return empty results, log error
+3. **No Venues**: Use default venue type or skip event
 
-## Key Distinctions
-- **Event Categories**: User-facing categories (fitness, social, creative) - separate from venue types
-- **Venue Types**: Google Places types (gym, restaurant, park) - used for venue selection only
-- **Venue Type Query**: Precise description for post-filtering and scoring
-- **Location**: Enhanced with Google Places data but maintains existing format
-- **Timing**: MVP uses random times; venue availability logic to be added later
+## Rate Limiting
 
-## Implementation Plan
+### API Quotas
+- Google Places Text Search: 100 requests per 100 seconds
+- Implement exponential backoff for retries
+- Cache results when possible
 
-### Phase 1: Foundation
-1. Set up Google Places API key
-2. Install axios for HTTP requests
-3. Create venue search functions with semantic matching
-4. Test with sample coordinates
+### Best Practices
+```typescript
+// Implement rate limiting
+const rateLimiter = new RateLimiter({
+    maxRequests: 100,
+    windowMs: 100000, // 100 seconds
+});
 
-### Phase 2: Integration
-1. Create event generation endpoint
-2. Implement enhanced venue scoring algorithm
-3. Add error handling and fallbacks
-4. Test with pseudo-event data
+// Use in venue search
+await rateLimiter.waitForToken();
+const venues = await searchText(params);
+```
 
-### Phase 3: Production
-1. Add user location endpoint
-2. Implement automated triggers
-3. Add monitoring and logging
-4. Optimize for scale
+## Testing
 
-## Next Steps
-1. Update database schema with new venue fields
-2. Implement semantic venue type matching system
-3. Create enhanced venue search and scoring functions
-4. Create event generation API endpoint
-5. Add user location management
-6. Integrate with pseudo-event generation pipeline
-7. Add venue availability timing logic (future enhancement)
+### Test Venue Search
+```bash
+npm run test:venue-search
+```
 
-## ✅ Implementation Status
+### Test Coverage
+- Text search functionality
+- Semantic scoring algorithm
+- Error handling and fallbacks
+- Rate limiting behavior
 
-**COMPLETED: Semantic Venue Type Matching System**
+## Performance Optimization
 
-The semantic venue type matching system has been fully implemented:
+### Caching Strategy
+- Cache venue embeddings for repeated queries
+- Store venue data to reduce API calls
+- Implement TTL-based cache invalidation
 
-1. **✅ Google Places Types Database**: Complete list of 301 Google Places API types with embeddings
-2. **✅ Semantic Matching Function**: `findBestVenueTypes()` with cosine similarity matching
-3. **✅ Confidence Scoring**: Calculates confidence in semantic mapping
-4. **✅ Integration with Pseudo-Event Generation**: Fully integrated with venue type extraction
+### Batch Processing
+- Process multiple venue searches concurrently
+- Use connection pooling for API requests
+- Implement request queuing for high load
 
-**Implementation Details:**
-- ✅ Uses OpenAI embeddings for semantic matching
-- ✅ Stores Google Places types in code for performance
-- ✅ Supports multiple venue types when semantic similarity is close
-- ✅ Implements confidence threshold for mapping quality
-- ✅ Fallback to keyword matching for low-confidence cases
-- ✅ **Global configuration variables** for scoring weights and thresholds
-- ✅ **Configurable scoring algorithm** through constants
+## Monitoring
 
-**Current Performance:**
-- Semantic matching works well for general venue types (coffee shop, restaurant, etc.)
-- Specific activity venues (like "rock climbing gym") need improvement
-- Confidence scores range from 56% to 100% depending on query specificity
+### Key Metrics
+- API response times
+- Success/failure rates
+- Venue selection quality scores
+- Rate limit usage
 
-# Current Issues and Deep Dive Plan
+### Logging
+```typescript
+console.log(`🌐 GOOGLE PLACES TEXT SEARCH API REQUEST:`);
+console.log(`   • Query: "${params.pseudoEvent.venueTypeQuery}"`);
+console.log(`   • Max results: ${params.maxResults || 20}`);
+console.log(`   • Location bias radius: ${EVENT_CONFIG.DEFAULT_RADIUS_METERS}m`);
+```
 
-## Problem Statement
-- When searching for specific venue types (e.g., "rock climbing gym"), the system consistently returns irrelevant or generic venues (e.g., pilates studios, generic gyms) instead of highly relevant matches.
-- The scores for these matches are low, but the system still returns them as the "best" available, even when the match is not appropriate.
-- The same irrelevant venues are returned repeatedly for specific queries, undermining trust in the recommendation system.
+## Future Enhancements
 
-## Root Cause Analysis (Based on Logging)
-**Primary Issue: Venue Type Matching Algorithm**
-- The venue type matching algorithm only looks for exact word matches between query words and venue types
-- "rock climbing gym" → ["rock", "climbing"] → No matches found in venue types like "gym", "fitness_center"
-- All venues get 0% venue type match score, relying only on distance and rating
-
-**Secondary Issue: Google Places API Limitations**
-- Google Places API doesn't have specific types for activities like "rock climbing"
-- Only generic types like "gym", "fitness_center", "sports_complex" are available
-- The API returns all gyms in the area, regardless of specific activities offered
-
-**Tertiary Issue: Scoring Threshold**
-- Minimum score threshold (30%) is too low, allowing poor matches to be selected
-- System selects venues with 0% venue type match as long as they have good distance/rating
-
-## Investigation/Improvement Plan
-- **✅ Add comprehensive logging:** COMPLETED - Now shows detailed analysis of each venue
-- **Improve venue type matching:** Enhance algorithm to handle compound terms and synonyms
-- **Add activity-specific filtering:** Use venue names and descriptions to filter for specific activities
-- **Increase scoring thresholds:** Require minimum venue type match scores
-- **Consider alternative APIs:** Explore Google Places Text Search for more specific queries
-- **Add venue name analysis:** Parse venue names for activity keywords (e.g., "climbing", "yoga", "pilates")
+### Planned Improvements
+1. **Advanced Filtering**: Price, accessibility, and preference filters
+2. **Multi-language Support**: International venue search
+3. **Real-time Availability**: Check venue opening hours
+4. **Alternative APIs**: Backup venue data sources
+5. **Predictive Caching**: Pre-cache popular venue types

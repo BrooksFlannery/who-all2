@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 import { generateRealEvents } from '../lib/event-generation';
-import { PseudoEvent } from '../lib/google-places';
+import { PseudoEvent } from '../lib/pseudo-events';
 
 // Load environment variables
 dotenv.config();
@@ -26,7 +26,11 @@ async function testEventGeneration() {
                 radiusMeters: 1000
             },
             venueTypeQuery: "coffee shop",
-            estimatedAttendees: 10
+            clusterUserIds: ["user1", "user2", "user3"],
+            generatedFrom: {
+                centroidUserIds: ["user1", "user2"],
+                clusterId: "cluster1"
+            }
         },
         {
             title: "Dinner Meetup",
@@ -37,7 +41,11 @@ async function testEventGeneration() {
                 radiusMeters: 800
             },
             venueTypeQuery: "restaurant",
-            estimatedAttendees: 8
+            clusterUserIds: ["user4", "user5", "user6"],
+            generatedFrom: {
+                centroidUserIds: ["user4", "user5"],
+                clusterId: "cluster2"
+            }
         },
         {
             title: "Rock Climbing Session",
@@ -48,7 +56,11 @@ async function testEventGeneration() {
                 radiusMeters: 1500
             },
             venueTypeQuery: "rock climbing gym",
-            estimatedAttendees: 15
+            clusterUserIds: ["user7", "user8", "user9"],
+            generatedFrom: {
+                centroidUserIds: ["user7", "user8"],
+                clusterId: "cluster3"
+            }
         }
     ];
 
