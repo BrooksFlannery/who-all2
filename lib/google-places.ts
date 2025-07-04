@@ -1,6 +1,7 @@
 import { cosineSimilarity } from 'ai';
 import axios from 'axios';
-import { VENUE_SCORING_CONFIG } from './constants';
+import { EVENT_CONFIG, VENUE_SCORING_CONFIG } from './constants';
+import { PseudoEvent } from './pseudo-events';
 import { generateVenueEmbedding } from './venue-embeddings';
 
 // Types for Google Places API integration
@@ -12,20 +13,6 @@ export interface VenueSearchParams {
     apiKey: string;            // From .env GOOGLE_PLACES_API_KEY
 }
 
-export interface PseudoEvent {
-    title: string;                    // e.g. "Rock Climbing Meetup"
-    description: string;              // Event description
-    categories: string[];             // Event categories: ["fitness", "social"]
-    targetLocation: {
-        center: { lat: number; lng: number };
-        radiusMeters: number;           // e.g. 5000 (5km)
-    };
-    venueTypeQuery: string;           // e.g. "rock climbing gym", "coffee shop" (precise description)
-    googleVenueTypes: string[];       // e.g. ["gym"], ["cafe", "coffee_shop"] (Google Places API types)
-    venueTypeConfidence: number;      // e.g. 0.85 (confidence in semantic mapping)
-    estimatedAttendees: number;       // Expected group size
-}
-
 export interface VenueCandidate {
     id: string;
     displayName: { text: string };
@@ -34,6 +21,11 @@ export interface VenueCandidate {
     rating?: number;
     priceLevel?: number;
     score?: number;
+    // ✅ ADD new fields for enhanced venue data
+    formattedAddress?: string;
+    googleMapsUri?: string;
+    primaryType?: string;
+    primaryTypeDisplayName?: string;
 }
 
 /**
@@ -88,91 +80,36 @@ function fallbackKeywordMatching(venueName: string, venueTypes: string[], target
     return nameMatchScore;
 }
 
-
-
 /**
- * Convert human-readable venue type query to Google Places API types
+ * Search for venues using Google Places API v1 Text Search
  */
-function mapVenueTypeToGoogleTypes(venueTypeQuery: string): string[] {
-    const query = venueTypeQuery.toLowerCase();
-
-    // Coffee shops and cafes
-    if (query.includes('coffee') || query.includes('cafe')) {
-        return ['cafe', 'coffee_shop'];
-    }
-
-    // Restaurants
-    if (query.includes('restaurant') || query.includes('dining') || query.includes('food')) {
-        return ['restaurant'];
-    }
-
-    // Gyms and fitness
-    if (query.includes('gym') || query.includes('fitness') || query.includes('climbing') || query.includes('workout')) {
-        return ['gym'];
-    }
-
-    // Parks and outdoor activities
-    if (query.includes('park') || query.includes('outdoor') || query.includes('trail')) {
-        return ['park', 'natural_feature'];
-    }
-
-    // Bars and nightlife
-    if (query.includes('bar') || query.includes('pub') || query.includes('nightlife')) {
-        return ['bar', 'night_club'];
-    }
-
-    // Museums and cultural
-    if (query.includes('museum') || query.includes('gallery') || query.includes('art')) {
-        return ['museum', 'art_gallery'];
-    }
-
-    // Libraries and study spaces
-    if (query.includes('library') || query.includes('study') || query.includes('tutoring')) {
-        return ['library'];
-    }
-
-    // Shopping and retail
-    if (query.includes('shop') || query.includes('store') || query.includes('mall')) {
-        return ['store', 'shopping_mall'];
-    }
-
-    // Default: search for all types if no specific match
-    return [];
-}
-
-/**
- * Search for nearby venues using Google Places API v1
- */
-export async function searchNearby(params: VenueSearchParams): Promise<VenueCandidate[]> {
-    // Use semantic-matched Google Places types for filtering, but prioritize the specific venueTypeQuery
-    const includedTypes = params.pseudoEvent.googleVenueTypes.length > 0
-        ? params.pseudoEvent.googleVenueTypes
-        : mapVenueTypeToGoogleTypes(params.pseudoEvent.venueTypeQuery);
-
-    console.log(`\n🌐 GOOGLE PLACES API REQUEST:`);
+export async function searchText(params: VenueSearchParams): Promise<VenueCandidate[]> {
+    console.log(`\n🌐 GOOGLE PLACES TEXT SEARCH API REQUEST:`);
     console.log(`   • Query: "${params.pseudoEvent.venueTypeQuery}"`);
-    console.log(`   • Included types: ${includedTypes.length > 0 ? includedTypes.join(', ') : 'None (searching all types)'}`);
     console.log(`   • Max results: ${params.maxResults || 20}`);
-    console.log(`   • Rank preference: DISTANCE`);
+    console.log(`   • Location bias radius: ${EVENT_CONFIG.DEFAULT_RADIUS_METERS}m`);
+
+    // Build the text query with location context
+    const textQuery = `${params.pseudoEvent.venueTypeQuery}`;
 
     const body = {
-        includedTypes: includedTypes.length > 0 ? includedTypes : undefined,  // Only include if we have specific types
-        locationRestriction: {
+        textQuery: textQuery,
+        locationBias: {
             circle: {
                 center: {
                     latitude: params.pseudoEvent.targetLocation.center.lat,
                     longitude: params.pseudoEvent.targetLocation.center.lng
                 },
-                radius: params.pseudoEvent.targetLocation.radiusMeters
+                radius: EVENT_CONFIG.DEFAULT_RADIUS_METERS
             }
         },
-        maxResultCount: params.maxResults || 20,
-        rankPreference: 'DISTANCE'
+        pageSize: params.maxResults || 20,
+        rankPreference: 'RELEVANCE' // Use relevance for text search instead of distance
     };
 
     try {
         const res = await axios.post(
-            'https://places.googleapis.com/v1/places:searchNearby',
+            'https://places.googleapis.com/v1/places:searchText',
             body,
             {
                 headers: {
@@ -183,7 +120,11 @@ export async function searchNearby(params: VenueSearchParams): Promise<VenueCand
                         'places.location',
                         'places.types',
                         'places.rating',
-                        'places.priceLevel'
+                        'places.priceLevel',
+                        'places.formattedAddress',    // ✅ ADD - Critical for directions
+                        'places.googleMapsUri',       // ✅ ADD - Easy navigation
+                        'places.primaryType',         // ✅ ADD - Better categorization
+                        'places.primaryTypeDisplayName' // ✅ ADD - Human-readable type
                     ].join(',')
                 }
             }
@@ -212,12 +153,10 @@ export async function searchNearby(params: VenueSearchParams): Promise<VenueCand
 export async function findBestVenue(params: VenueSearchParams): Promise<VenueCandidate | null> {
     console.log(`\n🔍 VENUE SELECTION PROCESS STARTED`);
     console.log(`📋 Query: "${params.pseudoEvent.venueTypeQuery}"`);
-    console.log(`🎯 Target Types: ${params.pseudoEvent.googleVenueTypes.join(', ')}`);
     console.log(`📍 Location: ${params.pseudoEvent.targetLocation.center.lat}, ${params.pseudoEvent.targetLocation.center.lng}`);
-    console.log(`📏 Radius: ${params.pseudoEvent.targetLocation.radiusMeters}m`);
-    console.log(`🎚️  Confidence: ${(params.pseudoEvent.venueTypeConfidence * 100).toFixed(1)}%`);
+    console.log(`📏 Radius: ${EVENT_CONFIG.DEFAULT_RADIUS_METERS}m`);
 
-    const candidates = await searchNearby(params);
+    const candidates = await searchText(params);
     console.log(`\n📊 FOUND ${candidates.length} CANDIDATE VENUES`);
 
     let bestCandidate: VenueCandidate | null = null;

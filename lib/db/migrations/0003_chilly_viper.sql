@@ -1,1 +1,0 @@
-ALTER TABLE "user" ADD COLUMN "recommended_event_ids" text[] DEFAULT '{}' NOT NULL;

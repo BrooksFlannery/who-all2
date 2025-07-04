@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
-import { findBestVenue, PseudoEvent } from '../lib/google-places';
+import { findBestVenue } from '../lib/google-places';
+import { PseudoEvent } from '../lib/pseudo-events';
 
 // Load environment variables
 dotenv.config();
@@ -25,9 +26,11 @@ async function testVenueSearch() {
             radiusMeters: 1000
         },
         venueTypeQuery: "coffee shop",
-        googleVenueTypes: ["cafe", "coffee_shop"],
-        venueTypeConfidence: 0.85,
-        estimatedAttendees: 10
+        clusterUserIds: ["user1", "user2", "user3"],
+        generatedFrom: {
+            centroidUserIds: ["user1", "user2"],
+            clusterId: "cluster1"
+        }
     };
 
     try {
@@ -56,9 +59,11 @@ async function testVenueSearch() {
                 radiusMeters: 800
             },
             venueTypeQuery: "restaurant",
-            googleVenueTypes: ["restaurant"],
-            venueTypeConfidence: 0.95,
-            estimatedAttendees: 8
+            clusterUserIds: ["user4", "user5", "user6"],
+            generatedFrom: {
+                centroidUserIds: ["user4", "user5"],
+                clusterId: "cluster2"
+            }
         };
 
         const restaurantVenue = await findBestVenue({
@@ -88,9 +93,11 @@ async function testVenueSearch() {
                 radiusMeters: 2000
             },
             venueTypeQuery: "rock climbing gym",
-            googleVenueTypes: ["gym"],
-            venueTypeConfidence: 0.85,
-            estimatedAttendees: 15
+            clusterUserIds: ["user7", "user8", "user9"],
+            generatedFrom: {
+                centroidUserIds: ["user7", "user8"],
+                clusterId: "cluster3"
+            }
         };
 
         const climbingVenue = await findBestVenue({
