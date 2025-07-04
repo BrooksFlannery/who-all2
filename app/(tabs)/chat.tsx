@@ -68,6 +68,38 @@ export default function ChatScreen() {
     }
   }, []);
 
+  // Function to trigger user embedding generation (debug feature)
+  const handleGenerateEmbeddings = useCallback(async () => {
+    console.log('🔘 Generate embeddings button clicked');
+    try {
+      console.log('📡 Making request to /api/chat/summarize...');
+      const response = await fetch('/api/chat/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('📥 Response received, status:', response.status);
+      const result = await response.json();
+      console.log('📋 Response data:', result);
+
+      if (response.ok) {
+        console.log('✅ Embedding generation successful');
+        Alert.alert(
+          'Embedding Generation Complete',
+          `Successfully generated user interest embeddings. Check console for details.`
+        );
+      } else {
+        console.log('❌ Embedding generation failed:', result);
+        Alert.alert('Error', 'Failed to generate embeddings.');
+      }
+    } catch (error) {
+      console.error('💥 Embedding generation request failed:', error);
+      Alert.alert('Error', 'Failed to connect to embedding service.');
+    }
+  }, []);
+
   // Render each message in the chat
   const renderMessage = useCallback(({ item }: { item: any }) => {
     return (
@@ -108,6 +140,14 @@ export default function ChatScreen() {
         >
           <ThemedText style={styles.debugButtonText}>
             {isComparingEvents ? 'Comparing...' : 'Debug: Compare Events'}
+          </ThemedText>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.debugButton, styles.debugButtonPrimary]}
+          onPress={handleGenerateEmbeddings}
+        >
+          <ThemedText style={styles.debugButtonText}>
+            Debug: Generate Embeddings
           </ThemedText>
         </TouchableOpacity>
       </View>
@@ -167,6 +207,9 @@ const styles = StyleSheet.create({
   },
   debugButtonSecondary: {
     backgroundColor: '#34C759',
+  },
+  debugButtonPrimary: {
+    backgroundColor: '#007AFF',
   },
   debugButtonDisabled: {
     backgroundColor: '#C7C7CC',

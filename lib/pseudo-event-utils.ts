@@ -122,7 +122,7 @@ export function extractTitle(description: string): string {
 export function extractCategories(description: string): string[] {
     const categories = [
         'fitness', 'social', 'creative', 'technology', 'education',
-        'food', 'music', 'outdoors', 'business', 'other'
+        'food', 'music', 'outdoors', 'business', 'sports', 'other'
     ];
 
     const lowerDescription = description.toLowerCase();

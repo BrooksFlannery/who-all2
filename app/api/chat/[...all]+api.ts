@@ -121,6 +121,14 @@ export async function POST(req: Request) {
 
     const { messages } = validation.data;
 
+    // Step 3.5: Check if this is the user's first message
+    const existingMessages = await db
+        .select({ count: count() })
+        .from(message)
+        .where(eq(message.userId, session.user.id));
+
+    const isFirstMessage = existingMessages[0]?.count === 0;
+
     // Step 4: Save the user's latest message to the database
     try {
         await db.insert(message).values({
@@ -150,15 +158,38 @@ export async function POST(req: Request) {
     }
 
     // Step 5: Create the AI conversation stream
+    const conversationMessages: any[] = [
+        {
+            role: "system" as const,
+            content: `You are a genuine, curious friend who loves learning about people's interests and experiences. Your goal is to have natural, engaging conversations that help you understand what makes the user tick.
+
+Key behaviors:
+- Ask thoughtful follow-up questions about their interests, hobbies, and experiences
+- Share genuine enthusiasm when they talk about things they're passionate about
+- Probe deeper into specific aspects of their interests (e.g., if they mention "photography," ask about their favorite subjects, equipment, or recent projects)
+- Connect different interests they mention to find patterns and deeper motivations
+- Use casual, conversational language - avoid being overly formal or robotic
+- Show you're listening by referencing things they've mentioned earlier in the conversation
+- Be genuinely curious about their experiences, challenges, and what they're excited about
+
+Remember: You're not just collecting data - you're building a real connection and understanding of who they are as a person.`
+        }
+    ];
+
+    // If this is the user's first message, add a conversation starter
+    if (isFirstMessage) {
+        conversationMessages.push({
+            role: "assistant" as const,
+            content: "What's up! I'm excited to meet you and learn about what makes you tick! What's something you're really passionate about or interested in these days? I love hearing about people's hobbies, projects, or anything that gets them excited."
+        });
+    }
+
+    // Add the user's messages
+    conversationMessages.push(...messages);
+
     const result = streamText({
         model: openai("gpt-4o-mini"),
-        messages: [
-            {
-                role: "system",
-                content: `You are a friendly, helpful AI assistant. You engage in natural conversation with users and provide helpful responses. Keep your replies warm, conversational, and concise.`
-            },
-            ...messages, // Include the conversation history
-        ],
+        messages: conversationMessages,
         onFinish: async (completion) => {
             const db = initializeDatabase();
             if (!db) {
@@ -213,7 +244,27 @@ export async function GET(req: Request) {
             .where(eq(message.userId, session.user.id))
             .orderBy(message.createdAt); // Oldest messages first
 
-        // Step 4: Transform and validate the response
+        // Step 4: If no messages exist, create and save the conversation starter
+        if (messages.length === 0) {
+            console.log('🤖 No messages found, creating conversation starter...');
+
+            const conversationStarter = {
+                userId: session.user.id,
+                content: "What's up! I'm excited to meet you and learn about what makes you tick! What's something you're really passionate about or interested in these days? I love hearing about people's hobbies, projects, or anything that gets them excited.",
+                role: "assistant" as const,
+                isSummarized: false
+            };
+
+            try {
+                const [savedMessage] = await db.insert(message).values(conversationStarter).returning();
+                messages.push(savedMessage);
+                console.log('✅ Conversation starter saved to database');
+            } catch (error) {
+                console.error('❌ Failed to save conversation starter:', error);
+            }
+        }
+
+        // Step 5: Transform and validate the response
         const transformedMessages = messages.map(msg => ({
             id: msg.id,
             role: msg.role,

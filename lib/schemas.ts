@@ -40,6 +40,7 @@ export const eventCategorySchema = z.enum([
     'music',
     'outdoors',
     'business',
+    'sports',
     'other'
 ]);
 
@@ -83,6 +84,14 @@ export const errorResponseSchema = z.object({
     error: z.string(),
     message: z.string(),
     statusCode: z.number().int().min(400).max(599),
+});
+
+// Summarization response validation
+export const summarizationResponseSchema = z.object({
+    success: z.boolean(),
+    message: z.string(),
+    messageCount: z.number().int().min(0),
+    summaryLength: z.number().int().min(0).optional(),
 });
 
 // Type exports for TypeScript

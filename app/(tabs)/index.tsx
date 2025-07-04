@@ -5,7 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // Event categories for filtering
-const categories = ['Recommended', 'All', 'Fitness', 'Social', 'Creative', 'Technology', 'Education', 'Food', 'Music', 'Outdoors', 'Business', 'Other'] as const;
+const categories = ['Recommended', 'All', 'Fitness', 'Social', 'Creative', 'Technology', 'Education', 'Food', 'Music', 'Outdoors', 'Business', 'Sports', 'Other'] as const;
 type CategoryFilter = typeof categories[number];
 
 export default function EventsScreen() {
@@ -142,6 +142,7 @@ export default function EventsScreen() {
       music: '#98D8C8',
       outdoors: '#F7DC6F',
       business: '#BB8FCE',
+      sports: '#FF8C42',
       other: '#85C1E9'
     };
     return colors[category as keyof typeof colors] || '#85C1E9';

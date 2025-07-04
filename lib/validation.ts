@@ -53,11 +53,7 @@ export function createValidationErrorResponse(zodError: z.ZodError): Response {
  * Validates environment variables and throws if invalid
  */
 export function validateEnv() {
-    // DEBUG: Print environment variables in validateEnv
-    console.log('DEBUG (validateEnv) ENVIRONMENT VARIABLES:');
-    console.log('  DATABASE_URL:', process.env.DATABASE_URL);
-    console.log('  OPENAI_API_KEY:', process.env.OPENAI_API_KEY);
-    console.log('  GOOGLE_PLACES_API_KEY:', process.env.GOOGLE_PLACES_API_KEY);
+    // Environment variables validated via envSchema
 
     try {
         return envSchema.parse(process.env);
