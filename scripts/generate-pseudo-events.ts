@@ -25,11 +25,7 @@ import {
 } from '../lib/pseudo-events';
 import { validateEnv } from '../lib/validation';
 
-// DEBUG: Print environment variables before anything else
-console.log('DEBUG (generate-pseudo-events.ts) ENVIRONMENT VARIABLES:');
-console.log('  DATABASE_URL:', process.env.DATABASE_URL);
-console.log('  OPENAI_API_KEY:', process.env.OPENAI_API_KEY);
-console.log('  GOOGLE_PLACES_API_KEY:', process.env.GOOGLE_PLACES_API_KEY);
+// Environment variables validated in validateEnv() function
 
 // Create database connection using the same pattern as seed-events.ts
 let db: any = null;

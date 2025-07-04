@@ -5,7 +5,6 @@ import { Alert, FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput,
 
 export default function ChatScreen() {
   const { messages, input, handleInputChange, handleSubmit, isLoading, loadMessageHistory } = useChat();
-  const [isSummarizing, setIsSummarizing] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [isComparingEvents, setIsComparingEvents] = useState(false);
 
@@ -31,42 +30,6 @@ export default function ChatScreen() {
   const handleTextChange = (text: string) => {
     handleInputChange({ target: { value: text } } as any);
   };
-
-  // Function to trigger manual summarization (debug feature)
-  const handleSummarize = useCallback(async () => {
-    console.log('🔘 Summarize button clicked');
-    setIsSummarizing(true);
-    try {
-      console.log('📡 Making request to /api/chat/summarize...');
-      const response = await fetch('/api/chat/summarize', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      console.log('📥 Response received, status:', response.status);
-      const result = await response.json();
-      console.log('📋 Response data:', result);
-
-      if (result.success) {
-        console.log('✅ Summarization successful');
-        Alert.alert(
-          'Summarization Complete',
-          `Processed ${result.messageCount} messages. Summary length: ${result.summaryLength} characters.`
-        );
-      } else {
-        console.log('❌ Summarization failed:', result);
-        Alert.alert('Error', 'Failed to summarize chat messages.');
-      }
-    } catch (error) {
-      console.error('💥 Summarization request failed:', error);
-      Alert.alert('Error', 'Failed to connect to summarization service.');
-    } finally {
-      console.log('🏁 Summarization process finished');
-      setIsSummarizing(false);
-    }
-  }, []);
 
   // Function to trigger event comparisons (debug feature)
   const handleCompareEvents = useCallback(async () => {
@@ -105,6 +68,38 @@ export default function ChatScreen() {
     }
   }, []);
 
+  // Function to trigger user embedding generation (debug feature)
+  const handleGenerateEmbeddings = useCallback(async () => {
+    console.log('🔘 Generate embeddings button clicked');
+    try {
+      console.log('📡 Making request to /api/chat/summarize...');
+      const response = await fetch('/api/chat/summarize', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      console.log('📥 Response received, status:', response.status);
+      const result = await response.json();
+      console.log('📋 Response data:', result);
+
+      if (response.ok) {
+        console.log('✅ Embedding generation successful');
+        Alert.alert(
+          'Embedding Generation Complete',
+          `Successfully generated user interest embeddings. Check console for details.`
+        );
+      } else {
+        console.log('❌ Embedding generation failed:', result);
+        Alert.alert('Error', 'Failed to generate embeddings.');
+      }
+    } catch (error) {
+      console.error('💥 Embedding generation request failed:', error);
+      Alert.alert('Error', 'Failed to connect to embedding service.');
+    }
+  }, []);
+
   // Render each message in the chat
   const renderMessage = useCallback(({ item }: { item: any }) => {
     return (
@@ -139,21 +134,20 @@ export default function ChatScreen() {
       {/* Debug Buttons - Temporary for development */}
       <View style={styles.debugContainer}>
         <TouchableOpacity
-          style={[styles.debugButton, isSummarizing && styles.debugButtonDisabled]}
-          onPress={handleSummarize}
-          disabled={isSummarizing}
-        >
-          <ThemedText style={styles.debugButtonText}>
-            {isSummarizing ? 'Summarizing...' : 'Debug: Summarize Chat'}
-          </ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity
           style={[styles.debugButton, styles.debugButtonSecondary, isComparingEvents && styles.debugButtonDisabled]}
           onPress={handleCompareEvents}
           disabled={isComparingEvents}
         >
           <ThemedText style={styles.debugButtonText}>
             {isComparingEvents ? 'Comparing...' : 'Debug: Compare Events'}
+          </ThemedText>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.debugButton, styles.debugButtonPrimary]}
+          onPress={handleGenerateEmbeddings}
+        >
+          <ThemedText style={styles.debugButtonText}>
+            Debug: Generate Embeddings
           </ThemedText>
         </TouchableOpacity>
       </View>
@@ -213,6 +207,9 @@ const styles = StyleSheet.create({
   },
   debugButtonSecondary: {
     backgroundColor: '#34C759',
+  },
+  debugButtonPrimary: {
+    backgroundColor: '#007AFF',
   },
   debugButtonDisabled: {
     backgroundColor: '#C7C7CC',

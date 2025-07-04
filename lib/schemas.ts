@@ -29,14 +29,6 @@ export const chatResponseSchema = z.object({
     })),
 });
 
-// Summarization response validation
-export const summarizationResponseSchema = z.object({
-    success: z.boolean(),
-    message: z.string(),
-    messageCount: z.number().int().min(0),
-    summaryLength: z.number().int().min(0).optional(),
-});
-
 // Event validation
 export const eventCategorySchema = z.enum([
     'fitness',
@@ -48,6 +40,7 @@ export const eventCategorySchema = z.enum([
     'music',
     'outdoors',
     'business',
+    'sports',
     'other'
 ]);
 
@@ -82,12 +75,9 @@ export const userSchema = z.object({
     email: z.string().email(),
     emailVerified: z.boolean(),
     image: z.string().url().nullable().optional(),
-    userInterestSummary: z.string(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
 });
-
-
 
 // API error response
 export const errorResponseSchema = z.object({
@@ -96,11 +86,18 @@ export const errorResponseSchema = z.object({
     statusCode: z.number().int().min(400).max(599),
 });
 
+// Summarization response validation
+export const summarizationResponseSchema = z.object({
+    success: z.boolean(),
+    message: z.string(),
+    messageCount: z.number().int().min(0),
+    summaryLength: z.number().int().min(0).optional(),
+});
+
 // Type exports for TypeScript
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
 export type ChatResponse = z.infer<typeof chatResponseSchema>;
-export type SummarizationResponse = z.infer<typeof summarizationResponseSchema>;
 export type Event = z.infer<typeof eventSchema>;
 export type EventsResponse = z.infer<typeof eventsResponseSchema>;
 export type User = z.infer<typeof userSchema>;

@@ -2,22 +2,13 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-// DEBUG: Print environment variables before any imports
-console.log('DEBUG (test-full-pipeline.ts) ENVIRONMENT VARIABLES - BEFORE IMPORTS:');
-console.log('  DATABASE_URL:', process.env.DATABASE_URL);
-console.log('  OPENAI_API_KEY:', process.env.OPENAI_API_KEY);
-console.log('  GOOGLE_PLACES_API_KEY:', process.env.GOOGLE_PLACES_API_KEY);
-console.log('  All env keys:', Object.keys(process.env).filter(key => key.includes('DATABASE') || key.includes('OPENAI') || key.includes('GOOGLE') || key.includes('API')));
+// Environment variables loaded via dotenv.config()
 
 import { deleteEventById, getAllEvents, insertEvents } from '../lib/db/events';
 import { generateRealEvents } from '../lib/event-generation';
 import { PseudoEvent } from '../lib/pseudo-events';
 
-// DEBUG: Print environment variables after dotenv.config()
-console.log('DEBUG (test-full-pipeline.ts) ENVIRONMENT VARIABLES - AFTER DOTENV:');
-console.log('  DATABASE_URL:', process.env.DATABASE_URL);
-console.log('  OPENAI_API_KEY:', process.env.OPENAI_API_KEY);
-console.log('  GOOGLE_PLACES_API_KEY:', process.env.GOOGLE_PLACES_API_KEY);
+// Environment variables validated in validateEnv() function
 
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
 

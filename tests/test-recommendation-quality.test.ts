@@ -160,7 +160,6 @@ async function createTestUsers(): Promise<void> {
             name: 'Test Wellness User',
             email: 'wellness@test.com',
             weightedInterests: 'Yoga (0.9), Meditation (0.9), Wellness (0.8), Mindfulness (0.8)',
-            userInterestSummary: 'Interested in yoga, meditation, and wellness activities',
             location: { lat: 40.7589, lng: -73.9851 }
         });
 
@@ -170,7 +169,6 @@ async function createTestUsers(): Promise<void> {
             name: 'Test Fitness User',
             email: 'fitness@test.com',
             weightedInterests: 'BJJ (0.9), Combat Sports (0.8), Fitness (0.8), Training (0.7)',
-            userInterestSummary: 'Interested in BJJ, combat sports, and fitness training',
             location: { lat: 40.7505, lng: -73.9934 }
         });
 
@@ -180,7 +178,6 @@ async function createTestUsers(): Promise<void> {
             name: 'Test Creative User',
             email: 'creative@test.com',
             weightedInterests: 'Painting (0.9), Art (0.8), Creative (0.8), Design (0.7)',
-            userInterestSummary: 'Interested in painting, art, and creative activities',
             location: { lat: 40.7265, lng: -73.9942 }
         });
 

@@ -5,24 +5,24 @@ import { updateUserInterestEmbedding } from "@/lib/embeddings";
 import { chatRequestSchema, chatResponseSchema } from "@/lib/schemas";
 import { createValidationErrorResponse, validateData } from "@/lib/validation";
 import { openai } from "@ai-sdk/openai";
-import { generateText, streamText } from "ai";
+import { streamText } from "ai";
 import { and, count, eq } from "drizzle-orm";
 
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
 
 /**
- * Helper function to trigger summarization in the background
- * This calls the summarization logic directly instead of making an HTTP request
+ * Helper function to update user interest embedding in the background
+ * This processes unsummarized messages and existing weighted interests to generate updated interests
  */
-async function triggerSummarization(userId: string) {
+async function triggerInterestUpdate(userId: string) {
     try {
-        console.log('🔄 Background summarization triggered for user:', userId);
+        console.log('🔄 Background interest update triggered for user:', userId);
 
         // Initialize and check if database is available
         const db = initializeDatabase();
         if (!db) {
-            console.warn('❌ Database not available for background summarization');
+            console.warn('❌ Database not available for background interest update');
             return;
         }
 
@@ -46,69 +46,28 @@ async function triggerSummarization(userId: string) {
             return;
         }
 
-        console.log('👤 Fetching existing user interest summary...');
-        // Get existing user interest summary for context
+        console.log('👤 Fetching existing weighted interests...');
+        // Get existing weighted interests for context
         const currentUser = await db
-            .select({ userInterestSummary: user.userInterestSummary })
+            .select({ weightedInterests: user.weightedInterests })
             .from(user)
             .where(eq(user.id, userId))
             .limit(1);
 
-        const existingSummary = currentUser[0]?.userInterestSummary || "";
-        console.log(`📋 Existing summary length: ${existingSummary.length} characters`);
+        const existingWeightedInterests = currentUser[0]?.weightedInterests || "";
+        console.log(`📋 Existing weighted interests: ${existingWeightedInterests ? existingWeightedInterests.substring(0, 100) + '...' : 'None'}`);
 
         console.log('🔄 Preparing conversation context...');
-        // Prepare conversation context for AI
+        // Prepare conversation context for weighted interest generation
         const conversationContext = unsummarizedMessages
             .map((msg: any) => `${msg.role}: ${msg.content}`)
             .join('\n');
 
         console.log(`💬 Conversation context prepared (${conversationContext.length} characters)`);
 
-        console.log('🤖 Calling OpenAI for summarization...');
-        // Generate new interest summary using AI
-        const { text: summaryText } = await generateText({
-            model: openai("gpt-4o-mini"),
-            messages: [
-                {
-                    role: "system",
-                    content: `You are an expert at analyzing conversations and extracting user interests. Generate a dense, factual summary of user interests from the conversation context.
-
-IMPORTANT: Your output should be a single paragraph optimized for AI embedding generation, not human readability. Include:
-- Interests: Hobbies, activities, topics they enjoy
-- Skill levels: Beginner, intermediate, expert in their interests  
-- Dislikes/aversions: Things they avoid or don't enjoy
-- Location preferences: Geographic areas they prefer
-- Availability patterns: When they're typically free
-- Demographic information: Age group, lifestyle factors
-
-If there's an existing summary, update it rather than replacing it. Make the summary comprehensive and factual.`
-                },
-                {
-                    role: "user",
-                    content: `Existing interest summary: "${existingSummary}"
-
-New conversation context:
-${conversationContext}
-
-Generate an updated interest summary that incorporates the new information.`
-                }
-            ],
-            maxTokens: 500,
-            temperature: 0.3,
-        });
-
-        console.log('⏳ Waiting for AI response...');
-        // Get the final summary text
-        console.log(`✅ AI summarization completed. Summary length: ${summaryText.length} characters`);
-
-        console.log('💾 Updating database with new summary...');
-        // Update database operations
-        console.log('🔄 Starting database updates...');
-
-        // Generate and store user interest embedding
+        // Generate and store user interest embedding using weighted interests
         console.log('🧠 Generating user interest embedding...');
-        await updateUserInterestEmbedding(userId, conversationContext);
+        await updateUserInterestEmbedding(userId, conversationContext, existingWeightedInterests);
         console.log('✅ User interest embedding generated and stored successfully');
 
         // Mark all processed messages as summarized
@@ -119,9 +78,9 @@ Generate an updated interest summary that incorporates the new information.`
             .where(eq(message.userId, userId));
 
         console.log('✅ Database updates completed successfully');
-        console.log('🎉 Background summarization completed successfully');
+        console.log('🎉 Background interest update completed successfully');
     } catch (error) {
-        console.warn('Background summarization error:', error);
+        console.warn('Background interest update error:', error);
     }
 }
 
@@ -129,7 +88,7 @@ Generate an updated interest summary that incorporates the new information.`
  * POST endpoint for handling chat conversations with AI
  * 
  * This endpoint processes user messages and provides AI responses in a simple
- * conversational format without any evaluation or tool calls.
+ * conversational format. It also triggers interest updates after 10 messages.
  * 
  * @param req - HTTP request containing the conversation messages
  * @returns Streaming response with AI-generated text
@@ -162,6 +121,14 @@ export async function POST(req: Request) {
 
     const { messages } = validation.data;
 
+    // Step 3.5: Check if this is the user's first message
+    const existingMessages = await db
+        .select({ count: count() })
+        .from(message)
+        .where(eq(message.userId, session.user.id));
+
+    const isFirstMessage = existingMessages[0]?.count === 0;
+
     // Step 4: Save the user's latest message to the database
     try {
         await db.insert(message).values({
@@ -170,7 +137,7 @@ export async function POST(req: Request) {
             role: "user"
         });
 
-        // Step 4.5: Check if we should trigger automatic summarization
+        // Step 4.5: Check if we should trigger interest update
         const unsummarizedCount = await db
             .select({ count: count() })
             .from(message)
@@ -181,25 +148,48 @@ export async function POST(req: Request) {
                 )
             );
 
-        // Trigger summarization if there are 10 or more unsummarized messages
+        // Trigger interest update if there are 10 or more unsummarized messages
         if (unsummarizedCount[0]?.count >= 10) {
             // Trigger in background - don't wait for it to complete
-            triggerSummarization(session.user.id);
+            triggerInterestUpdate(session.user.id);
         }
     } catch (error) {
         // Continue processing even if message save fails
     }
 
     // Step 5: Create the AI conversation stream
+    const conversationMessages: any[] = [
+        {
+            role: "system" as const,
+            content: `You are a genuine, curious friend who loves learning about people's interests and experiences. Your goal is to have natural, engaging conversations that help you understand what makes the user tick.
+
+Key behaviors:
+- Ask thoughtful follow-up questions about their interests, hobbies, and experiences
+- Share genuine enthusiasm when they talk about things they're passionate about
+- Probe deeper into specific aspects of their interests (e.g., if they mention "photography," ask about their favorite subjects, equipment, or recent projects)
+- Connect different interests they mention to find patterns and deeper motivations
+- Use casual, conversational language - avoid being overly formal or robotic
+- Show you're listening by referencing things they've mentioned earlier in the conversation
+- Be genuinely curious about their experiences, challenges, and what they're excited about
+
+Remember: You're not just collecting data - you're building a real connection and understanding of who they are as a person.`
+        }
+    ];
+
+    // If this is the user's first message, add a conversation starter
+    if (isFirstMessage) {
+        conversationMessages.push({
+            role: "assistant" as const,
+            content: "What's up! I'm excited to meet you and learn about what makes you tick! What's something you're really passionate about or interested in these days? I love hearing about people's hobbies, projects, or anything that gets them excited."
+        });
+    }
+
+    // Add the user's messages
+    conversationMessages.push(...messages);
+
     const result = streamText({
         model: openai("gpt-4o-mini"),
-        messages: [
-            {
-                role: "system",
-                content: `You are a friendly, helpful AI assistant. You engage in natural conversation with users and provide helpful responses. Keep your replies warm, conversational, and concise.`
-            },
-            ...messages, // Include the conversation history
-        ],
+        messages: conversationMessages,
         onFinish: async (completion) => {
             const db = initializeDatabase();
             if (!db) {
@@ -254,7 +244,27 @@ export async function GET(req: Request) {
             .where(eq(message.userId, session.user.id))
             .orderBy(message.createdAt); // Oldest messages first
 
-        // Step 4: Transform and validate the response
+        // Step 4: If no messages exist, create and save the conversation starter
+        if (messages.length === 0) {
+            console.log('🤖 No messages found, creating conversation starter...');
+
+            const conversationStarter = {
+                userId: session.user.id,
+                content: "What's up! I'm excited to meet you and learn about what makes you tick! What's something you're really passionate about or interested in these days? I love hearing about people's hobbies, projects, or anything that gets them excited.",
+                role: "assistant" as const,
+                isSummarized: false
+            };
+
+            try {
+                const [savedMessage] = await db.insert(message).values(conversationStarter).returning();
+                messages.push(savedMessage);
+                console.log('✅ Conversation starter saved to database');
+            } catch (error) {
+                console.error('❌ Failed to save conversation starter:', error);
+            }
+        }
+
+        // Step 5: Transform and validate the response
         const transformedMessages = messages.map(msg => ({
             id: msg.id,
             role: msg.role,

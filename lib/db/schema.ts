@@ -6,8 +6,7 @@ export const user = pgTable("user", {
     email: text('email').notNull().unique(),
     emailVerified: boolean('email_verified').$defaultFn(() => false).notNull(),
     image: text('image'),
-    userInterestSummary: text('user_interest_summary').default('').notNull(),
-    weightedInterests: text('weighted_interests'), // New field for activity-based weighted profiles
+    weightedInterests: text('weighted_interests'), // Activity-based weighted profiles
     interestEmbedding: text('interest_embedding'), // VECTOR(1536) - will be cast in SQL
     recommendedEventIds: text('recommended_event_ids').array().default([]).notNull(),
     location: jsonb("location"), // { latitude: number, longitude: number } - nullable
