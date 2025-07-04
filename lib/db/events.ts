@@ -20,6 +20,7 @@ export async function insertEvent(eventData: Event): Promise<string> {
         const insertData: EventInsert = {
             title: eventData.title,
             description: eventData.description,
+            embeddingDescription: eventData.embeddingDescription || null,
             categories: eventData.categories,
             date: eventData.date,
             location: eventData.location,
@@ -86,6 +87,7 @@ export async function insertEvents(events: Event[]): Promise<string[]> {
         const insertData: EventInsert[] = events.map(eventData => ({
             title: eventData.title,
             description: eventData.description,
+            embeddingDescription: eventData.embeddingDescription || null,
             categories: eventData.categories,
             date: eventData.date,
             location: eventData.location,
@@ -159,6 +161,7 @@ export async function getEventById(id: string): Promise<Event | null> {
         return {
             title: dbEvent.title,
             description: dbEvent.description,
+            embeddingDescription: dbEvent.embeddingDescription || undefined,
             categories: dbEvent.categories,
             date: dbEvent.date,
             location: dbEvent.location as { lat: number; lng: number; neighborhood?: string },
@@ -200,6 +203,7 @@ export async function getEventsByDateRange(startDate: Date, endDate: Date): Prom
         return result.map(dbEvent => ({
             title: dbEvent.title,
             description: dbEvent.description,
+            embeddingDescription: dbEvent.embeddingDescription || undefined,
             categories: dbEvent.categories,
             date: dbEvent.date,
             location: dbEvent.location as { lat: number; lng: number; neighborhood?: string },
@@ -234,6 +238,7 @@ export async function getAllEvents(): Promise<Event[]> {
         return result.map(dbEvent => ({
             title: dbEvent.title,
             description: dbEvent.description,
+            embeddingDescription: dbEvent.embeddingDescription || undefined,
             categories: dbEvent.categories,
             date: dbEvent.date,
             location: dbEvent.location as { lat: number; lng: number; neighborhood?: string },

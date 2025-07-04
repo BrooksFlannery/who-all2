@@ -106,16 +106,9 @@ Generate an updated interest summary that incorporates the new information.`
         // Update database operations
         console.log('🔄 Starting database updates...');
 
-        // Update user's interest summary
-        console.log('👤 Updating user interest summary...');
-        await db
-            .update(user)
-            .set({ userInterestSummary: summaryText })
-            .where(eq(user.id, userId));
-
         // Generate and store user interest embedding
         console.log('🧠 Generating user interest embedding...');
-        await updateUserInterestEmbedding(userId, summaryText);
+        await updateUserInterestEmbedding(userId, conversationContext);
         console.log('✅ User interest embedding generated and stored successfully');
 
         // Mark all processed messages as summarized

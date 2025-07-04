@@ -1,3 +1,4 @@
+import { generateEmbeddingDescription } from './embeddings';
 import { findBestVenue, VenueCandidate } from './google-places';
 import { PseudoEvent } from './pseudo-events';
 
@@ -5,6 +6,7 @@ import { PseudoEvent } from './pseudo-events';
 export interface Event {
     title: string;
     description: string;
+    embeddingDescription?: string; // Add embedding description field
     categories: string[];
     date: Date;
     location: {
@@ -103,10 +105,14 @@ export async function generateRealEvent(pseudoEvent: PseudoEvent, apiKey: string
     // Step 2: Generate random time (MVP - timing logic to be refined later)
     const eventTime = generateRandomTime();
 
-    // Step 3: Create real event
+    // Step 3: Generate embedding description
+    const embeddingDescription = await generateEmbeddingDescription(pseudoEvent.description);
+
+    // Step 4: Create real event
     return {
         title: pseudoEvent.title,
         description: pseudoEvent.description,
+        embeddingDescription: embeddingDescription,
         categories: pseudoEvent.categories,
         date: eventTime,
         location: {

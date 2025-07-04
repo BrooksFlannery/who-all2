@@ -80,7 +80,7 @@ async function clusterUsersByInterests(): Promise<UserCluster[]> {
     }
 
     // Step 2: Extract embeddings as 2D array and L2 normalize them
-    const embeddings = users.map(u => normalizeVector(JSON.parse(u.interestEmbedding!)));
+    const embeddings = users.map((u: any) => normalizeVector(JSON.parse(u.interestEmbedding!)));
 
     // Step 3: Run HDBSCAN clustering with euclidean distance on normalized vectors
     console.log('🔄 Running HDBSCAN clustering...');
@@ -113,7 +113,7 @@ async function clusterUsersByInterests(): Promise<UserCluster[]> {
 
                 // Create individual clusters for each unclustered user
                 userIds.forEach((userId, index) => {
-                    const user = users.find(u => u.id === userId)!;
+                    const user = users.find((u: any) => u.id === userId)!;
                     const userEmbedding = normalizeVector(JSON.parse(user.interestEmbedding!));
 
                     clusters.push({
@@ -130,7 +130,7 @@ async function clusterUsersByInterests(): Promise<UserCluster[]> {
 
         // Get embeddings for this cluster
         const clusterEmbeddings = userIds.map(userId => {
-            const user = users.find(u => u.id === userId)!;
+            const user = users.find((u: any) => u.id === userId)!;
             return normalizeVector(JSON.parse(user.interestEmbedding!));
         });
 
@@ -153,16 +153,16 @@ async function clusterUsersByInterests(): Promise<UserCluster[]> {
 async function generateEventDescriptions(centroidUserIds: string[]): Promise<string[]> {
     console.log(`🤖 Generating event descriptions for ${centroidUserIds.length} centroid users...`);
 
-    // Step 1: Fetch user interest summaries
+    // Step 1: Fetch user weighted interests
     const db = initializeDatabase();
     const users = await db.select().from(user).where(inArray(user.id, centroidUserIds));
-    const interestSummaries = users.map(u => u.userInterestSummary).join('\n\n');
+    const weightedInterests = users.map((u: any) => u.weightedInterests || 'No weighted interests available').join('\n\n');
 
     // Step 2: Generate 5 diverse event descriptions
     const prompt = `
-Based on these user interest summaries, generate 5 diverse event descriptions that would satisfy all these users:
+Based on these user weighted interests, generate 5 diverse event descriptions that would satisfy all these users:
 
-${interestSummaries}
+${weightedInterests}
 
 Generate 5 different event concepts that are as diverse as possible while still appealing to all users. Each event should have:
 - A clear title
@@ -213,11 +213,11 @@ async function selectBestEvent(descriptions: string[], clusterUserIds: string[])
         throw new Error('Database not available');
     }
     const users = await db.select().from(user).where(inArray(user.id, clusterUserIds));
-    const userEmbeddings = users.map(u => JSON.parse(u.interestEmbedding!));
+    const userEmbeddings = users.map((u: any) => JSON.parse(u.interestEmbedding!));
 
     // Step 3: Calculate average similarity for each event
     const eventScores = eventEmbeddings.map((eventEmbedding, index) => {
-        const similarities = userEmbeddings.map(userEmbedding => {
+        const similarities = userEmbeddings.map((userEmbedding: number[]) => {
             // Calculate cosine similarity
             const dotProduct = eventEmbedding.reduce((sum: number, val: number, i: number) => sum + val * userEmbedding[i], 0);
             const eventMagnitude = Math.sqrt(eventEmbedding.reduce((sum: number, val: number) => sum + val * val, 0));

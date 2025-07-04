@@ -37,6 +37,8 @@
     "test:recommended-events": "vitest run tests/test-recommended-events.test.ts",
     "test:event-recommendations": "vitest run tests/test-event-recommendations.test.ts",
     "test:venue-search": "npx tsx scripts/test-venue-search.ts",
+    "test:embeddings": "npx tsx scripts/test-embeddings.ts",
+    "test:embedding-quality": "npx tsx scripts/test-embedding-quality.ts",
     "test:event-generation": "npx tsx scripts/test-event-generation.ts",
     "test:full-pipeline": "npx tsx scripts/test-full-pipeline.ts",
     "run:full-pipeline": "CLEANUP_TEST_EVENTS=false npx tsx scripts/test-full-pipeline.ts",

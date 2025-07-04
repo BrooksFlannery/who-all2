@@ -16,6 +16,7 @@ export type Event = {
     date: Date;
     location: Location;
     description: string;
+    embeddingDescription?: string;
     categories: EventCategory[];
     hostId?: string;
     createdAt: Date;

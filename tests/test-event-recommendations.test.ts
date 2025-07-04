@@ -33,12 +33,12 @@ describe('Event Recommendations', () => {
 
     describe('User Interest Embedding Updates', () => {
         it('should update user interest embedding without throwing', async () => {
-            const interestSummary = 'I enjoy technology, coding, and learning new things';
+            const conversationContext = 'user: I enjoy technology, coding, and learning new things\nassistant: That sounds great! What specific technologies are you interested in?\nuser: I love JavaScript and React, and I want to learn more about AI and machine learning.';
 
             // This should not throw even if user doesn't exist
-            await expect(updateUserInterestEmbedding(testUserId, interestSummary))
+            await expect(updateUserInterestEmbedding(testUserId, conversationContext))
                 .resolves.not.toThrow();
-        });
+        }, 15000); // 15 second timeout for AI calls
     });
 
     describe('Event Embedding Updates', () => {
