@@ -13,6 +13,9 @@ export interface Event {
         lat: number;
         lng: number;
         neighborhood?: string;
+        placeId?: string;
+        venueName?: string;
+        photoReference?: string;
     };
     venue?: {
         placeId: string;
@@ -118,7 +121,10 @@ export async function generateRealEvent(pseudoEvent: PseudoEvent, apiKey: string
         location: {
             lat: venue.location.latitude,
             lng: venue.location.longitude,
-            neighborhood: extractNeighborhood(venue.displayName.text)
+            neighborhood: extractNeighborhood(venue.displayName.text),
+            placeId: venue.id,
+            venueName: venue.displayName.text,
+            photoReference: venue.photoResourceName || undefined,
         },
         venue: venueToEventVenue(venue),
         venueType: venue.types[0],

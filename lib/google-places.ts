@@ -26,6 +26,7 @@ export interface VenueCandidate {
     googleMapsUri?: string;
     primaryType?: string;
     primaryTypeDisplayName?: string;
+    photoResourceName?: string;
 }
 
 /**
@@ -124,7 +125,8 @@ export async function searchText(params: VenueSearchParams): Promise<VenueCandid
                         'places.formattedAddress',    // ✅ ADD - Critical for directions
                         'places.googleMapsUri',       // ✅ ADD - Easy navigation
                         'places.primaryType',         // ✅ ADD - Better categorization
-                        'places.primaryTypeDisplayName' // ✅ ADD - Human-readable type
+                        'places.primaryTypeDisplayName', // ✅ ADD - Human-readable type
+                        'places.photos' // <-- Add this to get photo references
                     ].join(',')
                 }
             }
@@ -140,10 +142,51 @@ export async function searchText(params: VenueSearchParams): Promise<VenueCandid
             });
         }
 
-        return places;
+        // Map API response to VenueCandidate[]
+        return places.map((place: any) => ({
+            id: place.id,
+            displayName: place.displayName,
+            location: place.location,
+            types: place.types,
+            rating: place.rating,
+            priceLevel: place.priceLevel,
+            formattedAddress: place.formattedAddress,
+            googleMapsUri: place.googleMapsUri,
+            primaryType: place.primaryType,
+            primaryTypeDisplayName: place.primaryTypeDisplayName,
+            photoResourceName: place.photos && place.photos.length > 0 ? place.photos[0].name : undefined,
+        }));
     } catch (error: any) {
         console.error('❌ Google Places API search failed:', error.response?.data || error.message);
         throw new Error(`Venue search failed: ${error.response?.data?.error?.message || error.message}`);
+    }
+}
+
+/**
+ * Get the actual photo URL from a photo resource name
+ */
+export async function getPhotoUrl(photoResourceName: string, apiKey: string, maxWidthPx: number = 800): Promise<string> {
+    try {
+        const response = await axios.get(
+            `https://places.googleapis.com/v1/${photoResourceName}/media`,
+            {
+                params: {
+                    maxWidthPx,
+                    key: apiKey
+                }
+            }
+        );
+
+        // The API returns a redirect or JSON with photoUri
+        if (response.data && response.data.photoUri) {
+            return response.data.photoUri;
+        }
+
+        // If it's a redirect, the response URL is the image URL
+        return response.request.res.responseUrl || response.config.url;
+    } catch (error) {
+        console.error('Error fetching photo URL:', error);
+        throw new Error('Failed to fetch photo URL');
     }
 }
 

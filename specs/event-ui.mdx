@@ -1,0 +1,104 @@
+write a spec for adding parralax scroll to the google images on my events ui ... really write out the math step by step i dont want any magic numbers. just set the zoom factor and let the math do its thing... remember to look at the structur of the event cards, and the structure of the event page...
+
+## Feature: Parallax Scroll for Venue Images in Event UI
+
+### 1. Background & Goals
+Our Event feed (see `app/(tabs)/index.tsx` and the reusable `components/EventCard.tsx`) currently renders a static venue photo obtained from the Google Places Photo API.  To add visual depth we want each image to exhibit a **parallax zoom** effect while the surrounding `FlatList` (or eventual `ScrollView`) is scrolled.
+
+Goals
+1. Purely declarative implementation – no `setState` in scroll-handlers.
+2. One **tunable constant** `ZOOM_FACTOR > 1` controls the total in-place magnification.
+3. All positional maths are written out – _no magic pixels_.
+4. Zero additional re-renders; the effect must run on the UI thread via **react-native-reanimated v2**.
+
+### 2. Component Topology
+```text
+EventList (Animated.FlatList)
+ └── EventCard
+      ├── View.photoContainer (height = H)
+      │    └── Animated.Image / VenuePhoto (height = H·ZOOM_FACTOR)
+      └── …other UI…
+```
+Key facts
+* `photoContainer` is **H px** tall (currently 200 or 160 in compact mode).
+* `VenuePhoto` will be wrapped with `Animated.Image` so we can drive `transform`.
+* Each `EventCard` may appear multiple times as the list recycles; therefore we measure its absolute Y-position at layout time.
+
+### 3. UPDATED Mathematics of the Parallax  *(v2)*
+We now want the image to start translating **as soon as the card enters the viewport** and always move **in the same direction as the scroll gesture**.
+
+Definitions
+* `H`  – card photo container height (160 / 200 px)
+* `z`  – `ZOOM_FACTOR` (≥ 1)
+* `ΔH = H·(z − 1)` – extra height created by zoom.
+* `V`  – viewport height (from `useWindowDimensions`).
+* `y_s` – list scroll offset (shared value).
+* `y_c` – card **top** position in scroll content.
+* `y_v = y_c − y_s` – distance from card top to viewport top.
+
+Normalize across the entire viewport:
+```
+  t = clamp((y_v − V/2) / (V/2), -1, 1)   // ‑1 = card top at viewport top,
+                                           //  0 = centred,
+                                           //  1 = card top at viewport bottom
+```
+Parallax translation (moves **with** scroll):
+```
+  translateY = (ΔH / 2) · t               // range [-ΔH/2, ΔH/2]
+```
+Behaviour
+* Card entering from **below** (scroll up → content moves down) ⇒ `t → 1` ⇒ `translateY = +ΔH/2` (image already shifted **downward**).
+* Card leaving at **top** ⇒ `t → -1` ⇒ `translateY = -ΔH/2` (image shifted **upward**).
+* Card centred ⇒ `translateY = 0` (half-way through the effect).
+
+### 4. UPDATED Reanimated Implementation Steps  *(v2)*
+1. **Shared values** stay the same (`scrollY`).
+2. Measure card position once in `onLayout` (unchanged).
+3. **Animated style**
+   ```ts
+   import { useWindowDimensions } from 'react-native';
+   ...
+   const { height: V } = useWindowDimensions();
+
+   const animatedStyle = useAnimatedStyle(() => {
+     const H = imageHeight;
+     const ΔH = H * (ZOOM_FACTOR - 1);
+     const t = clamp(((cardY.value - scrollY.value) - V / 2) / (V / 2), -1, 1);
+     const translateY = (ΔH / 2) * t;
+
+     return {
+       transform: [
+         { translateY },
+         { scale: ZOOM_FACTOR },
+       ],
+     };
+   });
+   ```
+4. JSX unchanged from v1.
+
+### 5. API Surface
+```ts
+// In EventCard.tsx
+const ZOOM_FACTOR = 1.25;   // can be A/B tested later
+```
+The factor lives in the same file for simplicity.
+
+### 6. Performance & Battery
+* Work confined to UI thread – no bridge hops.
+* `onScroll` already throttled by Reanimated to animation frame.
+* `windowSize` and `removeClippedSubviews` are enabled on the list to minimise memory.
+
+### 7. Accessibility
+* Images themselves are decorative; no a11y label change needed.
+* Scrolling performance must stay ≥ 60 fps on iPhone 11; test with Xcode Instruments.
+
+### 8. Validation Checklist
+- [ ] `ZOOM_FACTOR` drives both scale and translation – no other constants.
+- [ ] Visually inspect parallax at extreme scroll positions (top & bottom of list).
+- [ ] Confirm effect survives orientation change and dynamic type adjustments.
+- [ ] Automated Jest snapshot of `animatedStyle(0)` and `animatedStyle(H)`.
+
+---
+_Revision history_
+1. **v1** (2025-07-04) – Initial spec drafted.
+2. **v2** (2025-07-04) – Adjusted math & direction so parallax starts at bottom/top of viewport and moves with scroll.

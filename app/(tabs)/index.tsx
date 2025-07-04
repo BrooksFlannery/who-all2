@@ -1,8 +1,9 @@
 import { useAuth } from '@/components/AuthProvider';
+import { EventList } from '@/components/EventList';
 import { getAuthHeaders } from '@/lib/auth-client';
 import { Event, EventCategory } from '@/lib/db/types';
 import React, { useEffect, useState } from 'react';
-import { FlatList, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // Event categories for filtering
 const categories = ['Recommended', 'All', 'Fitness', 'Social', 'Creative', 'Technology', 'Education', 'Food', 'Music', 'Outdoors', 'Business', 'Sports', 'Other'] as const;
@@ -103,95 +104,7 @@ export default function EventsScreen() {
       ? events
       : events.filter(event => event.categories.includes(selectedCategory.toLowerCase() as EventCategory));
 
-  const formatDate = (date: Date | string) => {
-    const eventDate = typeof date === 'string' ? new Date(date) : date;
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
 
-    if (eventDate.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (eventDate.toDateString() === tomorrow.toDateString()) {
-      return 'Tomorrow';
-    } else {
-      return eventDate.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        weekday: 'short'
-      });
-    }
-  };
-
-  const formatTime = (date: Date | string) => {
-    const eventDate = typeof date === 'string' ? new Date(date) : date;
-    return eventDate.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  };
-
-  const getCategoryColor = (category: string) => {
-    const colors = {
-      fitness: '#FF6B6B',
-      social: '#4ECDC4',
-      creative: '#45B7D1',
-      technology: '#96CEB4',
-      education: '#FFEAA7',
-      food: '#DDA0DD',
-      music: '#98D8C8',
-      outdoors: '#F7DC6F',
-      business: '#BB8FCE',
-      sports: '#FF8C42',
-      other: '#85C1E9'
-    };
-    return colors[category as keyof typeof colors] || '#85C1E9';
-  };
-
-  const renderEventCard = ({ item }: { item: Event }) => (
-    <TouchableOpacity style={styles.eventCard} activeOpacity={0.7}>
-      <View style={styles.eventHeader}>
-        <View style={styles.dateTimeContainer}>
-          <Text style={styles.eventDate}>{formatDate(item.date)}</Text>
-          <Text style={styles.eventTime}>{formatTime(item.date)}</Text>
-        </View>
-        <View style={styles.categoriesContainer}>
-          {item.categories.map((category, index) => (
-            <View
-              key={index}
-              style={[
-                styles.categoryBadge,
-                { backgroundColor: getCategoryColor(category) }
-              ]}
-            >
-              <Text style={styles.categoryText}>{category}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      <Text style={styles.eventTitle}>{item.title}</Text>
-      <Text style={styles.eventDescription}>{item.description}</Text>
-
-      <View style={styles.eventFooter}>
-        <View style={styles.locationContainer}>
-          <Text style={styles.locationText}>
-            📍 {(item.location as any)?.neighborhood || 'San Francisco'}
-          </Text>
-        </View>
-        <View style={styles.statsContainer}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{item.attendeesCount}</Text>
-            <Text style={styles.statLabel}>Going</Text>
-          </View>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>{item.interestedCount}</Text>
-            <Text style={styles.statLabel}>Interested</Text>
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
 
   const isCurrentlyLoading = selectedCategory === 'Recommended'
     ? isLoadingRecommended
@@ -271,13 +184,12 @@ export default function EventsScreen() {
           </Text>
         </View>
       ) : (
-        <FlatList
-          data={filteredEvents}
-          renderItem={renderEventCard}
-          keyExtractor={(item) => item.id}
-          style={styles.eventsList}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.eventsListContent}
+        <EventList
+          events={filteredEvents}
+          onEventPress={(event: Event) => {
+            // TODO: Navigate to event detail view
+            console.log('Event pressed:', event.id);
+          }}
         />
       )}
     </View>
@@ -338,109 +250,7 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontWeight: '700',
   },
-  eventsList: {
-    flex: 1,
-  },
-  eventsListContent: {
-    padding: 20,
-    gap: 16,
-  },
-  eventCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  eventHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  dateTimeContainer: {
-    flexShrink: 0,
-  },
-  eventDate: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 2,
-  },
-  eventTime: {
-    fontSize: 14,
-    color: '#666666',
-    fontWeight: '500',
-  },
-  categoriesContainer: {
-    flexDirection: 'row',
-    gap: 6,
-    flexWrap: 'wrap',
-    justifyContent: 'flex-end',
-    alignItems: 'flex-start',
-    flex: 1,
-    marginLeft: 12,
-  },
-  categoryBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  categoryText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    textTransform: 'capitalize',
-  },
-  eventTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    marginBottom: 8,
-    lineHeight: 26,
-  },
-  eventDescription: {
-    fontSize: 15,
-    color: '#495057',
-    lineHeight: 22,
-    marginBottom: 16,
-  },
-  eventFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  locationContainer: {
-    flex: 1,
-  },
-  locationText: {
-    fontSize: 14,
-    color: '#666666',
-    fontWeight: '500',
-  },
-  statsContainer: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  statItem: {
-    alignItems: 'center',
-  },
-  statNumber: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1A1A1A',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#666666',
-    fontWeight: '500',
-  },
+
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',

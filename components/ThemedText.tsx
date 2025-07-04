@@ -15,7 +15,11 @@ export function ThemedText({
   type = 'default',
   ...rest
 }: ThemedTextProps) {
-  const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
+  // Always call useThemeColor to follow React hooks rules
+  const defaultColor = useThemeColor('text');
+
+  // Determine the color to use
+  const color = lightColor && darkColor ? lightColor : defaultColor;
 
   return (
     <Text
@@ -55,6 +59,5 @@ const styles = StyleSheet.create({
   link: {
     lineHeight: 30,
     fontSize: 16,
-    color: '#0a7ea4',
   },
 });

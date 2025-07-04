@@ -36,6 +36,9 @@ export type Location = {
     lat: number;
     lng: number;
     neighborhood?: string;
+    placeId?: string;        // Google Places ID
+    venueName?: string;      // Venue name for display
+    photoReference?: string; // Google Places photo reference
 };
 
 export type UserPreferences = {
