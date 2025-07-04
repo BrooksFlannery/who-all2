@@ -7,6 +7,7 @@ export const user = pgTable("user", {
     emailVerified: boolean('email_verified').$defaultFn(() => false).notNull(),
     image: text('image'),
     userInterestSummary: text('user_interest_summary').default('').notNull(),
+    weightedInterests: text('weighted_interests'), // New field for activity-based weighted profiles
     interestEmbedding: text('interest_embedding'), // VECTOR(1536) - will be cast in SQL
     recommendedEventIds: text('recommended_event_ids').array().default([]).notNull(),
     location: jsonb("location"), // { latitude: number, longitude: number } - nullable
@@ -84,6 +85,7 @@ export const event = pgTable("event", {
     date: timestamp("date", { withTimezone: true }).notNull(),
     location: jsonb("location").notNull(), // { lat: number, lng: number, neighborhood?: string }
     description: text("description").notNull(),
+    embeddingDescription: text("embedding_description"), // New field for machine-optimized descriptions
     categories: text("categories").array().notNull(), // Array of categories instead of single category
 
     // New Google Places fields

@@ -9,8 +9,6 @@
  * Usage: npm run generate:embeddings
  */
 
-import { openai } from '@ai-sdk/openai';
-import { generateText } from 'ai';
 import 'dotenv/config';
 import { eq, isNull } from 'drizzle-orm';
 
@@ -19,113 +17,41 @@ import { message, user } from '../lib/db/schema';
 import { updateUserInterestEmbedding } from '../lib/embeddings';
 
 /**
- * Generate interest summary for a user based on their messages
- */
-async function generateUserInterestSummary(userId: string): Promise<string> {
-    console.log(`🔍 Generating interest summary for user ${userId}...`);
-
-    const database = initializeDatabase();
-    if (!database) {
-        throw new Error('Database not available');
-    }
-
-    // Get all messages for this user
-    const userMessages = await database
-        .select()
-        .from(message)
-        .where(eq(message.userId, userId))
-        .orderBy(message.createdAt);
-
-    console.log(`📝 Found ${userMessages.length} messages for user ${userId}`);
-
-    if (userMessages.length === 0) {
-        console.log(`⚠️ No messages found for user ${userId}, skipping`);
-        return '';
-    }
-
-    // Get existing user interest summary for context
-    const currentUser = await database
-        .select({ userInterestSummary: user.userInterestSummary })
-        .from(user)
-        .where(eq(user.id, userId))
-        .limit(1);
-
-    const existingSummary = currentUser[0]?.userInterestSummary || "";
-    console.log(`📋 Existing summary length: ${existingSummary.length} characters`);
-
-    // Prepare conversation context for AI
-    const conversationContext = userMessages
-        .map(msg => `${msg.role}: ${msg.content}`)
-        .join('\n');
-
-    console.log(`💬 Conversation context prepared (${conversationContext.length} characters)`);
-
-    // Generate new interest summary using AI
-    console.log('🤖 Calling OpenAI for summarization...');
-    const { text: summaryText } = await generateText({
-        model: openai("gpt-4o-mini"),
-        messages: [
-            {
-                role: "system",
-                content: `You are an expert at analyzing conversations and extracting user interests. Generate a dense, factual summary of user interests from the conversation context.
-
-IMPORTANT: Your output should be a single paragraph optimized for AI embedding generation, not human readability. Include:
-- Interests: Hobbies, activities, topics they enjoy
-- Skill levels: Beginner, intermediate, expert in their interests  
-- Dislikes/aversions: Things they avoid or don't enjoy
-- Location preferences: Geographic areas they prefer
-- Availability patterns: When they're typically free
-- Demographic information: Age group, lifestyle factors
-
-If there's an existing summary, update it rather than replacing it. Make the summary comprehensive and factual.`
-            },
-            {
-                role: "user",
-                content: `Existing interest summary: "${existingSummary}"
-
-New conversation context:
-${conversationContext}
-
-Generate an updated interest summary that incorporates the new information.`
-            }
-        ],
-        maxTokens: 500,
-        temperature: 0.3,
-    });
-
-    console.log(`✅ AI summarization completed. Summary length: ${summaryText.length} characters`);
-    return summaryText;
-}
-
-/**
- * Process a single user: generate summary and embedding
+ * Process a single user: generate weighted interests and embedding
  */
 async function processUser(userId: string): Promise<boolean> {
     try {
         console.log(`\n👤 Processing user: ${userId}`);
 
-        // Step 1: Generate interest summary
-        const summary = await generateUserInterestSummary(userId);
-
-        if (!summary) {
-            console.log(`⚠️ No summary generated for user ${userId}, skipping`);
-            return false;
-        }
-
-        // Step 2: Update user's interest summary in database
-        console.log('💾 Updating user interest summary...');
+        // Get all messages for this user to create conversation context
         const database = initializeDatabase();
         if (!database) {
             throw new Error('Database not available');
         }
-        await database
-            .update(user)
-            .set({ userInterestSummary: summary })
-            .where(eq(user.id, userId));
 
-        // Step 3: Generate and store user interest embedding
+        const userMessages = await database
+            .select()
+            .from(message)
+            .where(eq(message.userId, userId))
+            .orderBy(message.createdAt);
+
+        console.log(`📝 Found ${userMessages.length} messages for user ${userId}`);
+
+        if (userMessages.length === 0) {
+            console.log(`⚠️ No messages found for user ${userId}, skipping`);
+            return false;
+        }
+
+        // Prepare conversation context for embedding generation
+        const conversationContext = userMessages
+            .map(msg => `${msg.role}: ${msg.content}`)
+            .join('\n');
+
+        console.log(`💬 Conversation context prepared (${conversationContext.length} characters)`);
+
+        // Generate and store user interest embedding using conversation context
         console.log('🧠 Generating user interest embedding...');
-        await updateUserInterestEmbedding(userId, summary);
+        await updateUserInterestEmbedding(userId, conversationContext);
         console.log(`✅ Successfully processed user ${userId}`);
 
         return true;
@@ -141,7 +67,7 @@ async function processUser(userId: string): Promise<boolean> {
 async function generateUserEmbeddings(): Promise<void> {
     console.log('🚀 GENERATE USER EMBEDDINGS SCRIPT');
     console.log('==================================================');
-    console.log('🎯 Processing seeded users to generate interest summaries and embeddings...\n');
+    console.log('🎯 Processing seeded users to generate weighted interests and embeddings...\n');
 
     const startTime = Date.now();
     let successCount = 0;

@@ -128,12 +128,12 @@ describe('Database Connection and User Data', () => {
 
                 // Check location structure
                 const location = firstUser.location as any;
-                expect(location).toHaveProperty('latitude');
-                expect(location).toHaveProperty('longitude');
-                expect(typeof location.latitude).toBe('number');
-                expect(typeof location.longitude).toBe('number');
+                expect(location).toHaveProperty('lat');
+                expect(location).toHaveProperty('lng');
+                expect(typeof location.lat).toBe('number');
+                expect(typeof location.lng).toBe('number');
 
-                console.log(`📍 Sample location: ${location.latitude}, ${location.longitude}`);
+                console.log(`📍 Sample location: ${location.lat}, ${location.lng}`);
             }
         });
     });
