@@ -1,7 +1,7 @@
 import { openai } from '@ai-sdk/openai';
 import { cosineSimilarity, embed, embedMany } from 'ai';
 import { eq, isNotNull } from 'drizzle-orm';
-import { db } from './db/index';
+import { initializeDatabase } from './db/index';
 import { event, user } from './db/schema';
 
 // Embedding model configuration
@@ -44,7 +44,8 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
  * Generate embedding for user interest summary and store in database
  */
 export async function updateUserInterestEmbedding(userId: string, interestSummary: string): Promise<void> {
-    if (!db) {
+    const database = initializeDatabase();
+    if (!database) {
         console.error('Database not available');
         return;
     }
@@ -52,7 +53,7 @@ export async function updateUserInterestEmbedding(userId: string, interestSummar
     try {
         const embedding = await generateEmbedding(interestSummary);
 
-        await db.update(user)
+        await database.update(user)
             .set({
                 interestEmbedding: JSON.stringify(embedding),
                 updatedAt: new Date()
@@ -70,7 +71,8 @@ export async function updateUserInterestEmbedding(userId: string, interestSummar
  * Generate embedding for event and store in database
  */
 export async function updateEventEmbedding(eventId: string, title: string, description: string, categories: string[]): Promise<void> {
-    if (!db) {
+    const database = initializeDatabase();
+    if (!database) {
         console.error('Database not available');
         return;
     }
@@ -80,7 +82,7 @@ export async function updateEventEmbedding(eventId: string, title: string, descr
         const eventText = `${title} ${description} ${categories.join(' ')}`;
         const embedding = await generateEmbedding(eventText);
 
-        await db.update(event)
+        await database.update(event)
             .set({
                 embedding: JSON.stringify(embedding),
                 updatedAt: new Date()
@@ -103,14 +105,15 @@ export async function getEventRecommendations(userId: string): Promise<Array<{
     description: string;
     similarity: number;
 }>> {
-    if (!db) {
+    const database = initializeDatabase();
+    if (!database) {
         console.error('Database not available');
         return [];
     }
 
     try {
         // Get user's interest embedding
-        const userResult = await db.select({ interestEmbedding: user.interestEmbedding })
+        const userResult = await database.select({ interestEmbedding: user.interestEmbedding })
             .from(user)
             .where(eq(user.id, userId))
             .limit(1);
@@ -123,7 +126,7 @@ export async function getEventRecommendations(userId: string): Promise<Array<{
         const userEmbedding = JSON.parse(userResult[0].interestEmbedding) as number[];
 
         // Get all events with embeddings
-        const events = await db.select({
+        const events = await database.select({
             id: event.id,
             title: event.title,
             description: event.description,
@@ -174,10 +177,11 @@ export async function getEventRecommendations(userId: string): Promise<Array<{
  * Update user's cached recommended event IDs
  */
 async function updateUserRecommendedEvents(userId: string, eventIds: string[]): Promise<void> {
-    if (!db) return;
+    const database = initializeDatabase();
+    if (!database) return;
 
     try {
-        await db.update(user)
+        await database.update(user)
             .set({
                 recommendedEventIds: eventIds,
                 updatedAt: new Date()
@@ -195,13 +199,14 @@ async function updateUserRecommendedEvents(userId: string, eventIds: string[]): 
  * Generate embeddings for all events in the database
  */
 export async function generateAllEventEmbeddings(): Promise<void> {
-    if (!db) {
+    const database = initializeDatabase();
+    if (!database) {
         console.error('Database not available');
         return;
     }
 
     try {
-        const events = await db.select({
+        const events = await database.select({
             id: event.id,
             title: event.title,
             description: event.description,

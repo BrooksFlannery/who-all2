@@ -171,10 +171,76 @@ npm run db:migrate
 
 # Open database studio
 npm run db:studio
-
-# Seed database
-npm run db:seed
 ```
+
+### User Seeding
+The system provides flexible user seeding with configurable user counts:
+
+#### Basic Seeding
+```bash
+# Seed all available users (45 users, 225 messages)
+npm run seed:users
+
+# Seed with custom count
+npm run seed:users -- --users=10
+```
+
+#### Predefined User Counts
+```bash
+# Small dataset (10 users, 50 messages)
+npm run seed:users:small
+
+# Medium dataset (20 users, 100 messages)  
+npm run seed:users:medium
+
+# Large dataset (30 users, 150 messages)
+npm run seed:users:large
+
+# All users (45 users, 225 messages)
+npm run seed:users:all
+```
+
+#### Testing with Seeded Users
+```bash
+# Test full pipeline with small dataset
+npm run test:with-seed:small
+
+# Test full pipeline with medium dataset
+npm run test:with-seed:medium
+
+# Test full pipeline with large dataset
+npm run test:with-seed:large
+
+# Test full pipeline with all users
+npm run test:with-seed:all
+```
+
+#### Running the Full Pipeline (Keep Events)
+```bash
+# Run full pipeline with existing users (keeps events in database)
+npm run run:full-pipeline
+
+# Run full pipeline with small dataset (10 users)
+npm run run:with-seed:small
+
+# Run full pipeline with medium dataset (20 users)
+npm run run:with-seed:medium
+
+# Run full pipeline with large dataset (30 users)
+npm run run:with-seed:large
+
+# Run full pipeline with all users (45 users)
+npm run run:with-seed:all
+```
+
+**Note**: The `run:` commands keep events in the database, while `test:` commands clean up afterward.
+
+**Features:**
+- **Automatic Cleanup**: Removes existing seeded users before creating new ones
+- **Diverse User Profiles**: 45 users across 11 interest clusters
+- **Realistic Data**: Each user has 5 messages with varied timestamps
+- **Geographic Distribution**: Users spread across NYC locations
+- **Interest Clusters**: Fitness, Creative Arts, Technology, Food, Music, Education, Outdoor, Business, Science, Activism, Travel
 
 ## 📊 API Endpoints
 

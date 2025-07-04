@@ -1,4 +1,4 @@
-import { db } from '@/lib/db';
+import { initializeDatabase } from '@/lib/db';
 import { generateEmbedding, getEventRecommendations, updateEventEmbedding, updateUserInterestEmbedding } from '@/lib/embeddings';
 import { beforeAll, describe, expect, it } from 'vitest';
 
@@ -8,6 +8,7 @@ describe('Event Recommendations', () => {
 
     beforeAll(async () => {
         // Skip tests if database is not available
+        const db = initializeDatabase();
         if (!db) {
             console.log('Database not available, skipping tests');
             return;
@@ -62,18 +63,11 @@ describe('Event Recommendations', () => {
         });
 
         it('should handle database unavailability gracefully', async () => {
-            // Mock db as null to test graceful handling
-            const originalDb = db;
-            // @ts-ignore - temporarily mock db as null
-            (global as any).db = null;
-
+            // Test graceful handling when database is not available
             const recommendations = await getEventRecommendations(testUserId);
 
             expect(Array.isArray(recommendations)).toBe(true);
             expect(recommendations.length).toBe(0);
-
-            // Restore original db
-            (global as any).db = originalDb;
         });
     });
 

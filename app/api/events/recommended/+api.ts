@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { initializeDatabase } from "@/lib/db";
 import { event, user } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 
@@ -10,7 +10,8 @@ export async function GET(req: Request) {
         return new Response("Unauthorized", { status: 401 });
     }
 
-    // Verify database availability
+    // Initialize and verify database availability
+    const db = initializeDatabase();
     if (!db) {
         return new Response("Database not available", { status: 500 });
     }

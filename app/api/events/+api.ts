@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { initializeDatabase } from "@/lib/db";
 import { event } from "@/lib/db/schema";
 import { eventsResponseSchema } from "@/lib/schemas";
 import { validateData } from "@/lib/validation";
@@ -25,8 +25,8 @@ export async function GET(req: Request) {
         return new Response("Unauthorized", { status: 401 });
     }
 
-    // Step 2: Verify database availability
-    // Early exit if database connection is not available
+    // Step 2: Initialize and verify database availability
+    const db = initializeDatabase();
     if (!db) {
         return new Response("Database not available", { status: 500 });
     }

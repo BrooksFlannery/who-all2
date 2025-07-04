@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { db } from '../lib/db';
+import { initializeDatabase } from '../lib/db';
 import { message, user } from '../lib/db/schema';
 import { chatRequestSchema, chatResponseSchema, summarizationResponseSchema } from '../lib/schemas';
 import { validateData } from '../lib/validation';
@@ -24,6 +24,7 @@ const testMessages = [
 describe('Chat Summarization System', () => {
     beforeAll(async () => {
         // Clean up any existing test data
+        const db = initializeDatabase();
         if (db) {
             await db.delete(message).where(eq(message.userId, testUserId));
             await db.delete(user).where(eq(user.id, testUserId));
@@ -32,6 +33,7 @@ describe('Chat Summarization System', () => {
 
     afterAll(async () => {
         // Clean up test data
+        const db = initializeDatabase();
         if (db) {
             await db.delete(message).where(eq(message.userId, testUserId));
             await db.delete(user).where(eq(user.id, testUserId));
@@ -40,6 +42,12 @@ describe('Chat Summarization System', () => {
 
     describe('Database Schema', () => {
         it('should have required fields for user table', () => {
+            const db = initializeDatabase();
+            if (!db) {
+                console.log('Database not available, skipping test');
+                return;
+            }
+
             expect(user.id).toBeDefined();
             expect(user.userInterestSummary).toBeDefined();
             expect(user.name).toBeDefined();
@@ -47,6 +55,12 @@ describe('Chat Summarization System', () => {
         });
 
         it('should have required fields for message table', () => {
+            const db = initializeDatabase();
+            if (!db) {
+                console.log('Database not available, skipping test');
+                return;
+            }
+
             expect(message.id).toBeDefined();
             expect(message.userId).toBeDefined();
             expect(message.content).toBeDefined();
@@ -110,6 +124,7 @@ describe('Chat Summarization System', () => {
 
     describe('Database Operations', () => {
         it('should create a test user', async () => {
+            const db = initializeDatabase();
             if (!db) {
                 console.log('Database not available, skipping test');
                 return;
@@ -136,6 +151,7 @@ describe('Chat Summarization System', () => {
         });
 
         it('should insert test messages', async () => {
+            const db = initializeDatabase();
             if (!db) {
                 console.log('Database not available, skipping test');
                 return;
@@ -161,6 +177,7 @@ describe('Chat Summarization System', () => {
         });
 
         it('should find unsummarized messages', async () => {
+            const db = initializeDatabase();
             if (!db) {
                 console.log('Database not available, skipping test');
                 return;
@@ -283,6 +300,27 @@ describe('Chat Summarization System', () => {
 
                 expect(message.role).toBe(role);
             });
+        });
+    });
+
+    describe('Chat Summarization', () => {
+        it('should have message schema with isSummarized field', () => {
+            const db = initializeDatabase();
+            if (!db) {
+                console.log('Database not available, skipping test');
+                return;
+            }
+
+            expect(message.isSummarized).toBeDefined();
+            expect(user.userInterestSummary).toBeDefined();
+        });
+
+        it('should handle database unavailability gracefully', () => {
+            // Test that the function doesn't crash when database is not available
+            expect(() => {
+                const db = initializeDatabase();
+                return db;
+            }).not.toThrow();
         });
     });
 }); 

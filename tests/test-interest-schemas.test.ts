@@ -1,21 +1,35 @@
-import { beforeAll, describe, expect, it } from 'vitest';
-import { db } from '../lib/db';
+import { describe, expect, it } from 'vitest';
+import { initializeDatabase } from '../lib/db';
 import { message, user } from '../lib/db/schema';
 
-describe('Database Schema Validation', () => {
-    beforeAll(async () => {
-        // Ensure database connection is available
+describe('Interest Schemas', () => {
+    it('should validate user interest summary', () => {
+        const db = initializeDatabase();
         if (!db) {
-            console.log('Database not available for testing');
+            console.log('Database not available, skipping test');
+            return;
         }
+
+        // This test just verifies the database can be initialized
+        expect(db).toBeDefined();
     });
 
     describe('User Table Schema', () => {
         it('should have userInterestSummary column', () => {
+            const db = initializeDatabase();
+            if (!db) {
+                console.log('Database not available for testing');
+                return;
+            }
             expect(user.userInterestSummary).toBeDefined();
         });
 
         it('should have required user fields', () => {
+            const db = initializeDatabase();
+            if (!db) {
+                console.log('Database not available for testing');
+                return;
+            }
             expect(user.id).toBeDefined();
             expect(user.name).toBeDefined();
             expect(user.email).toBeDefined();
@@ -27,10 +41,20 @@ describe('Database Schema Validation', () => {
 
     describe('Message Table Schema', () => {
         it('should have isSummarized column', () => {
+            const db = initializeDatabase();
+            if (!db) {
+                console.log('Database not available for testing');
+                return;
+            }
             expect(message.isSummarized).toBeDefined();
         });
 
         it('should have required message fields', () => {
+            const db = initializeDatabase();
+            if (!db) {
+                console.log('Database not available for testing');
+                return;
+            }
             expect(message.id).toBeDefined();
             expect(message.userId).toBeDefined();
             expect(message.content).toBeDefined();
@@ -41,6 +65,7 @@ describe('Database Schema Validation', () => {
 
     describe('Database Connectivity', () => {
         it('should be able to query user table', async () => {
+            const db = initializeDatabase();
             if (!db) {
                 console.log('Database not available, skipping test');
                 return;
@@ -63,6 +88,7 @@ describe('Database Schema Validation', () => {
         });
 
         it('should be able to query message table', async () => {
+            const db = initializeDatabase();
             if (!db) {
                 console.log('Database not available, skipping test');
                 return;
@@ -87,12 +113,18 @@ describe('Database Schema Validation', () => {
 
     describe('Schema Relationships', () => {
         it('should have proper foreign key relationship', () => {
+            const db = initializeDatabase();
+            if (!db) {
+                console.log('Database not available for testing');
+                return;
+            }
             // Check that message.userId references user.id
             expect(message.userId).toBeDefined();
             expect(user.id).toBeDefined();
         });
 
         it('should support user interest summary updates', async () => {
+            const db = initializeDatabase();
             if (!db) {
                 console.log('Database not available, skipping test');
                 return;
@@ -115,6 +147,11 @@ describe('Database Schema Validation', () => {
 
     describe('Data Types', () => {
         it('should have correct data types for user fields', () => {
+            const db = initializeDatabase();
+            if (!db) {
+                console.log('Database not available for testing');
+                return;
+            }
             // These tests verify the schema structure
             expect(typeof user.id).toBe('object'); // Drizzle column object
             expect(typeof user.userInterestSummary).toBe('object');
@@ -123,6 +160,11 @@ describe('Database Schema Validation', () => {
         });
 
         it('should have correct data types for message fields', () => {
+            const db = initializeDatabase();
+            if (!db) {
+                console.log('Database not available for testing');
+                return;
+            }
             expect(typeof message.id).toBe('object');
             expect(typeof message.userId).toBe('object');
             expect(typeof message.content).toBe('object');

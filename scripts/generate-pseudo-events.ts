@@ -25,18 +25,34 @@ import {
 } from '../lib/pseudo-events';
 import { validateEnv } from '../lib/validation';
 
-// Validate environment variables
-const env = validateEnv();
-const databaseUrl = env.DATABASE_URL;
-
-if (!databaseUrl) {
-    console.error('DATABASE_URL is not defined');
-    process.exit(1);
-}
+// DEBUG: Print environment variables before anything else
+console.log('DEBUG (generate-pseudo-events.ts) ENVIRONMENT VARIABLES:');
+console.log('  DATABASE_URL:', process.env.DATABASE_URL);
+console.log('  OPENAI_API_KEY:', process.env.OPENAI_API_KEY);
+console.log('  GOOGLE_PLACES_API_KEY:', process.env.GOOGLE_PLACES_API_KEY);
 
 // Create database connection using the same pattern as seed-events.ts
-const sql = neon(databaseUrl);
-const db = drizzle(sql);
+let db: any = null;
+
+/**
+ * Initialize database connection
+ */
+function initializeDatabase() {
+    if (!db) {
+        // Validate environment variables
+        const env = validateEnv();
+        const databaseUrl = env.DATABASE_URL;
+
+        if (!databaseUrl) {
+            console.error('DATABASE_URL is not defined');
+            process.exit(1);
+        }
+
+        const sql = neon(databaseUrl);
+        db = drizzle(sql);
+    }
+    return db;
+}
 
 /**
  * L2 normalize a vector (divide by its magnitude)
@@ -54,9 +70,7 @@ async function clusterUsersByInterests(): Promise<UserCluster[]> {
     console.log('🔍 Starting user clustering...');
 
     // Step 1: Fetch all users with interest embeddings
-    if (!db) {
-        throw new Error('Database not available');
-    }
+    const db = initializeDatabase();
     const users = await db.select().from(user).where(not(isNull(user.interestEmbedding)));
     console.log(`📊 Found ${users.length} users with interest embeddings`);
 
@@ -140,9 +154,7 @@ async function generateEventDescriptions(centroidUserIds: string[]): Promise<str
     console.log(`🤖 Generating event descriptions for ${centroidUserIds.length} centroid users...`);
 
     // Step 1: Fetch user interest summaries
-    if (!db) {
-        throw new Error('Database not available');
-    }
+    const db = initializeDatabase();
     const users = await db.select().from(user).where(inArray(user.id, centroidUserIds));
     const interestSummaries = users.map(u => u.userInterestSummary).join('\n\n');
 
