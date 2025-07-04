@@ -102,6 +102,12 @@ export function calculateClusterLocation(clusterUserIds: string[], users: any[])
  * Extract title from event description
  */
 export function extractTitle(description: string): string {
+    // First, check if it's in "Title - Description" format
+    const dashMatch = description.match(/^(.+?)\s*-\s*(.+)$/);
+    if (dashMatch) {
+        return dashMatch[1].trim();
+    }
+
     // Simple extraction - take first line or first sentence
     const lines = description.split('\n');
     const firstLine = lines[0].trim();
@@ -155,6 +161,32 @@ export function parseEventDescriptions(response: string): string[] {
     }
 
     return descriptions;
+}
+
+/**
+ * Parse event descriptions from OpenAI response and return separate title and description
+ */
+export function parseEventDescriptionsWithTitles(response: string): Array<{ title: string, description: string }> {
+    const lines = response.split('\n').filter(line => line.trim());
+    const events: Array<{ title: string, description: string }> = [];
+
+    for (const line of lines) {
+        // Look for numbered lines like "1. [Title] - [Description]"
+        const match = line.match(/^\d+\.\s*(.+?)\s*-\s*(.+)$/);
+        if (match) {
+            const title = match[1].trim();
+            const description = match[2].trim();
+            events.push({ title, description });
+        } else if (line.trim().length > 10) {
+            // If no numbered format, just take non-empty lines as description
+            events.push({
+                title: extractTitle(line.trim()),
+                description: line.trim()
+            });
+        }
+    }
+
+    return events;
 }
 
 /**

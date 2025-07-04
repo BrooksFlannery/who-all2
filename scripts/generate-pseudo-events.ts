@@ -13,9 +13,8 @@ import {
     calculateCentroid,
     calculateClusterLocation,
     extractCategories,
-    extractTitle,
     findCentroidUsers,
-    parseEventDescriptions,
+    parseEventDescriptionsWithTitles,
     parseVenueTypes
 } from '../lib/pseudo-event-utils';
 import {
@@ -146,7 +145,7 @@ async function clusterUsersByInterests(): Promise<UserCluster[]> {
 /**
  * Generate event descriptions using OpenAI
  */
-async function generateEventDescriptions(centroidUserIds: string[]): Promise<string[]> {
+async function generateEventDescriptions(centroidUserIds: string[]): Promise<Array<{ title: string, description: string }>> {
     console.log(`🤖 Generating event descriptions for ${centroidUserIds.length} centroid users...`);
 
     // Step 1: Fetch user weighted interests
@@ -160,10 +159,55 @@ Based on these user weighted interests, generate 5 diverse event descriptions th
 
 ${weightedInterests}
 
+CRITICAL EVENT REQUIREMENTS:
+- Events must be held in public spaces that DO NOT require booking or reservations
+- Events should be meetup/club format - no classes, workshops, or events requiring a host/organizer
+- Events must be self-organized by attendees showing up at the same time/place
+- No private venues, event spaces, or places requiring advance booking
+- All events must be suitable for urban settings - no beaches, mountains, or rural activities
+
+ACCEPTABLE VENUE TYPES:
+- Parks, hiking trails, beaches, outdoor recreation areas
+- Coffee shops, cafes, restaurants, bars, breweries
+- Climbing gyms, fitness centers, yoga studios (drop-in)
+- Libraries, bookstores, museums (free days)
+- Farmers markets, food trucks, outdoor markets
+- Public squares, plazas, community centers
+- Skate parks, basketball courts, tennis courts
+- Public gardens, botanical gardens, nature preserves
+- Board game cafes, arcades, bowling alleys
+- Public art installations, street art areas
+
+EVENT FORMAT EXAMPLES:
+- "Rock Climbing Meetup at Local Gym - Drop-in climbing session for all levels"
+- "Coffee & Code at Local Cafe - Bring your laptop for casual coding together"
+- "Sunset Photography Walk at City Park - Capture golden hour photos"
+- "Board Game Night at Game Cafe - Casual gaming, bring your favorites"
+- "Yoga in the Park - Outdoor yoga session, bring your own mat"
+- "Food Truck Tour - Sample different cuisines at the weekly market"
+- "Skate Session at Skate Park - All skill levels welcome"
+- "Sci-Fi Book Club at Cafe - Discuss this month's selection"
+- "Vintage Vinyl Hunt at Record Store - Browse and share music discoveries"
+- "Urban Sketching at Botanical Garden - Bring your sketchbook and pencils"
+- "Craft Beer Tasting at Brewery - Sample seasonal brews and discuss flavors"
+- "Chess Meetup at Library - Casual games for all skill levels"
+- "Plant Swap at Community Garden - Trade cuttings and gardening tips"
+- "Poetry Open Mic at Bookstore - Share original work or favorite poems"
+- "Rock Climbing Bouldering Session - Indoor bouldering for all levels"
+- "Street Photography Walk - Capture urban scenes and street life"
+- "Meditation Circle at Zen Garden - Group meditation in peaceful setting"
+- "Baked Goods Potluck at Park - Share homemade treats and recipes"
+- "Art Gallery Walk - Visit public galleries and discuss the artwork"
+- "Tech Discussion at Cafe - Bring your laptop for casual tech talk"
+- "Fitness Meetup at Park - Group workout session, all levels welcome"
+- "Creative Writing Workshop at Library - Share stories and get feedback"
+
 Generate 5 different event concepts that are as diverse as possible while still appealing to all users. Each event should have:
-- A clear title
-- A detailed description of what the event involves
-- Why it would appeal to this group
+- A clear, specific title with venue type
+- A description of what the event involves
+- Be realistic for a group of 10-20 people to self-organize
+- Only require things people can easily bring (laptop, mat, sketchbook, etc.) or items that exist at the venue
+- Don't assume special exhibitions, equipment, or events exist - focus on regular venue activities
 
 Format as numbered list:
 1. [Title] - [Description]
@@ -175,7 +219,8 @@ Format as numbered list:
         const response = await generateText({
             model: openai('gpt-4'),
             prompt,
-            temperature: 0.8
+            temperature: 0.8,
+            maxTokens: 300
         });
 
         const content = response.text;
@@ -183,10 +228,10 @@ Format as numbered list:
             throw new Error('No content received from OpenAI');
         }
 
-        // Step 3: Parse response into individual descriptions
-        const descriptions = parseEventDescriptions(content);
-        console.log(`✅ Generated ${descriptions.length} event descriptions`);
-        return descriptions;
+        // Step 3: Parse response into individual descriptions with separate titles
+        const events = parseEventDescriptionsWithTitles(content);
+        console.log(`✅ Generated ${events.length} event descriptions`);
+        return events;
     } catch (error) {
         console.error('❌ Error generating event descriptions:', error);
         throw error;
@@ -196,12 +241,12 @@ Format as numbered list:
 /**
  * Select best event via embedding comparison
  */
-async function selectBestEvent(descriptions: string[], clusterUserIds: string[]): Promise<string> {
-    console.log(`🎯 Selecting best event from ${descriptions.length} options...`);
+async function selectBestEvent(events: Array<{ title: string, description: string }>, clusterUserIds: string[]): Promise<{ title: string, description: string }> {
+    console.log(`🎯 Selecting best event from ${events.length} options...`);
 
     // Step 1: Embed all event descriptions
     const eventEmbeddings = await Promise.all(
-        descriptions.map(desc => generateEmbedding(desc))
+        events.map(event => generateEmbedding(event.description))
     );
 
     // Step 2: Get all user embeddings in cluster
@@ -221,13 +266,13 @@ async function selectBestEvent(descriptions: string[], clusterUserIds: string[])
             return dotProduct / (eventMagnitude * userMagnitude);
         });
         const avgSimilarity = similarities.reduce((a: number, b: number) => a + b, 0) / similarities.length;
-        return { description: descriptions[index], score: avgSimilarity };
+        return { event: events[index], score: avgSimilarity };
     });
 
     // Step 4: Return highest scoring event
     const bestEvent = eventScores.sort((a, b) => b.score - a.score)[0];
     console.log(`✅ Selected event with score: ${bestEvent.score.toFixed(4)}`);
-    return bestEvent.description;
+    return bestEvent.event;
 }
 
 /**
@@ -322,9 +367,9 @@ async function generatePseudoEvents(): Promise<EventGenerationResult> {
 
                 // Step 7: Create pseudo-event (venue type will be filled in next step)
                 const pseudoEvent: PseudoEvent = {
-                    title: extractTitle(bestDescription),
-                    description: bestDescription,
-                    categories: extractCategories(bestDescription),
+                    title: bestDescription.title,
+                    description: bestDescription.description,
+                    categories: extractCategories(bestDescription.description),
                     targetLocation: {
                         center: { lat: location.latitude, lng: location.longitude }, // Convert to Google Maps format
                         radiusMeters: EVENT_CONFIG.DEFAULT_RADIUS_METERS
