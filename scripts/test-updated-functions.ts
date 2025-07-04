@@ -54,37 +54,42 @@ async function testUpdatedFunctions() {
 
         // Test 2: Create a test user and update their interest embedding
         console.log('\n--- Test 2: User Interest Embedding ---');
-        const testUserContext = "I'm a professional athlete who loves Brazilian Jiu-Jitsu and combat sports. I also enjoy filmmaking as a creative outlet and do some coding on the side. I'm looking for high-intensity fitness events and training opportunities.";
+        const testUserId = "test-user-" + Date.now();
 
-        // First, let's create a test user
-        const testUser = await database.insert(user).values({
-            id: "test-user-" + Date.now(),
-            name: "Test Athlete",
-            email: "test-athlete@example.com",
-            emailVerified: true,
-            userInterestSummary: "Professional athlete interested in BJJ, filmmaking, and coding"
+        // Create test user
+        await database.insert(user).values({
+            id: testUserId,
+            name: 'Test User',
+            email: `test-${Date.now()}@example.com`,
+            weightedInterests: 'BJJ (0.8), Combat Sports (0.7), Filmmaking (0.6), Creative (0.5)',
+            location: { lat: 40.7589, lng: -73.9851 },
+            createdAt: new Date(),
+            updatedAt: new Date()
         }).returning();
 
-        const userId = testUser[0].id;
-        console.log(`✅ Created test user: ${userId}`);
+        console.log('✅ Test user created');
 
-        // Update the user interest embedding
-        await updateUserInterestEmbedding(userId, testUserContext);
+        // Test the updated function
+        const conversationContext = 'user: I love BJJ and martial arts training\nassistant: That sounds intense! What do you enjoy most about it?\nuser: I love the technical aspect and the physical challenge. It\'s like a physical chess game.';
 
-        // Verify the weighted interests were stored
-        const updatedUser = await database.select({
-            userInterestSummary: user.userInterestSummary,
-            weightedInterests: user.weightedInterests,
-            interestEmbedding: user.interestEmbedding
-        })
+        console.log('🧠 Testing updateUserInterestEmbedding...');
+        await updateUserInterestEmbedding(testUserId, conversationContext);
+
+        // Verify the update
+        const updatedUser = await database
+            .select({
+                id: user.id,
+                name: user.name,
+                weightedInterests: user.weightedInterests,
+                interestEmbedding: user.interestEmbedding
+            })
             .from(user)
-            .where(eq(user.id, userId))
+            .where(eq(user.id, testUserId))
             .limit(1);
 
-        console.log('📊 User embedding results:');
-        console.log(`   Old summary: ${updatedUser[0]?.userInterestSummary}`);
-        console.log(`   Weighted interests: ${updatedUser[0]?.weightedInterests}`);
-        console.log(`   Has embedding: ${!!updatedUser[0]?.interestEmbedding}`);
+        console.log(`   ✅ User updated successfully`);
+        console.log(`   📊 New weighted interests: ${updatedUser[0]?.weightedInterests}`);
+        console.log(`   🧠 Has embedding: ${updatedUser[0]?.interestEmbedding ? 'Yes' : 'No'}`);
 
         console.log('\n🎉 All updated function tests completed successfully!');
 

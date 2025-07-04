@@ -5,24 +5,24 @@ import { updateUserInterestEmbedding } from "@/lib/embeddings";
 import { chatRequestSchema, chatResponseSchema } from "@/lib/schemas";
 import { createValidationErrorResponse, validateData } from "@/lib/validation";
 import { openai } from "@ai-sdk/openai";
-import { generateText, streamText } from "ai";
+import { streamText } from "ai";
 import { and, count, eq } from "drizzle-orm";
 
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
 
 /**
- * Helper function to trigger summarization in the background
- * This calls the summarization logic directly instead of making an HTTP request
+ * Helper function to update user interest embedding in the background
+ * This processes unsummarized messages and existing weighted interests to generate updated interests
  */
-async function triggerSummarization(userId: string) {
+async function triggerInterestUpdate(userId: string) {
     try {
-        console.log('🔄 Background summarization triggered for user:', userId);
+        console.log('🔄 Background interest update triggered for user:', userId);
 
         // Initialize and check if database is available
         const db = initializeDatabase();
         if (!db) {
-            console.warn('❌ Database not available for background summarization');
+            console.warn('❌ Database not available for background interest update');
             return;
         }
 
@@ -46,69 +46,28 @@ async function triggerSummarization(userId: string) {
             return;
         }
 
-        console.log('👤 Fetching existing user interest summary...');
-        // Get existing user interest summary for context
+        console.log('👤 Fetching existing weighted interests...');
+        // Get existing weighted interests for context
         const currentUser = await db
-            .select({ userInterestSummary: user.userInterestSummary })
+            .select({ weightedInterests: user.weightedInterests })
             .from(user)
             .where(eq(user.id, userId))
             .limit(1);
 
-        const existingSummary = currentUser[0]?.userInterestSummary || "";
-        console.log(`📋 Existing summary length: ${existingSummary.length} characters`);
+        const existingWeightedInterests = currentUser[0]?.weightedInterests || "";
+        console.log(`📋 Existing weighted interests: ${existingWeightedInterests ? existingWeightedInterests.substring(0, 100) + '...' : 'None'}`);
 
         console.log('🔄 Preparing conversation context...');
-        // Prepare conversation context for AI
+        // Prepare conversation context for weighted interest generation
         const conversationContext = unsummarizedMessages
             .map((msg: any) => `${msg.role}: ${msg.content}`)
             .join('\n');
 
         console.log(`💬 Conversation context prepared (${conversationContext.length} characters)`);
 
-        console.log('🤖 Calling OpenAI for summarization...');
-        // Generate new interest summary using AI
-        const { text: summaryText } = await generateText({
-            model: openai("gpt-4o-mini"),
-            messages: [
-                {
-                    role: "system",
-                    content: `You are an expert at analyzing conversations and extracting user interests. Generate a dense, factual summary of user interests from the conversation context.
-
-IMPORTANT: Your output should be a single paragraph optimized for AI embedding generation, not human readability. Include:
-- Interests: Hobbies, activities, topics they enjoy
-- Skill levels: Beginner, intermediate, expert in their interests  
-- Dislikes/aversions: Things they avoid or don't enjoy
-- Location preferences: Geographic areas they prefer
-- Availability patterns: When they're typically free
-- Demographic information: Age group, lifestyle factors
-
-If there's an existing summary, update it rather than replacing it. Make the summary comprehensive and factual.`
-                },
-                {
-                    role: "user",
-                    content: `Existing interest summary: "${existingSummary}"
-
-New conversation context:
-${conversationContext}
-
-Generate an updated interest summary that incorporates the new information.`
-                }
-            ],
-            maxTokens: 500,
-            temperature: 0.3,
-        });
-
-        console.log('⏳ Waiting for AI response...');
-        // Get the final summary text
-        console.log(`✅ AI summarization completed. Summary length: ${summaryText.length} characters`);
-
-        console.log('💾 Updating database with new summary...');
-        // Update database operations
-        console.log('🔄 Starting database updates...');
-
-        // Generate and store user interest embedding
+        // Generate and store user interest embedding using weighted interests
         console.log('🧠 Generating user interest embedding...');
-        await updateUserInterestEmbedding(userId, conversationContext);
+        await updateUserInterestEmbedding(userId, conversationContext, existingWeightedInterests);
         console.log('✅ User interest embedding generated and stored successfully');
 
         // Mark all processed messages as summarized
@@ -119,9 +78,9 @@ Generate an updated interest summary that incorporates the new information.`
             .where(eq(message.userId, userId));
 
         console.log('✅ Database updates completed successfully');
-        console.log('🎉 Background summarization completed successfully');
+        console.log('🎉 Background interest update completed successfully');
     } catch (error) {
-        console.warn('Background summarization error:', error);
+        console.warn('Background interest update error:', error);
     }
 }
 
@@ -129,7 +88,7 @@ Generate an updated interest summary that incorporates the new information.`
  * POST endpoint for handling chat conversations with AI
  * 
  * This endpoint processes user messages and provides AI responses in a simple
- * conversational format without any evaluation or tool calls.
+ * conversational format. It also triggers interest updates after 10 messages.
  * 
  * @param req - HTTP request containing the conversation messages
  * @returns Streaming response with AI-generated text
@@ -170,7 +129,7 @@ export async function POST(req: Request) {
             role: "user"
         });
 
-        // Step 4.5: Check if we should trigger automatic summarization
+        // Step 4.5: Check if we should trigger interest update
         const unsummarizedCount = await db
             .select({ count: count() })
             .from(message)
@@ -181,10 +140,10 @@ export async function POST(req: Request) {
                 )
             );
 
-        // Trigger summarization if there are 10 or more unsummarized messages
+        // Trigger interest update if there are 10 or more unsummarized messages
         if (unsummarizedCount[0]?.count >= 10) {
             // Trigger in background - don't wait for it to complete
-            triggerSummarization(session.user.id);
+            triggerInterestUpdate(session.user.id);
         }
     } catch (error) {
         // Continue processing even if message save fails

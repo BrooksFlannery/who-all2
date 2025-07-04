@@ -43,7 +43,7 @@ export async function generateEmbeddings(texts: string[]): Promise<number[][]> {
 /**
  * Generate embedding for user interest summary and store in database
  */
-export async function updateUserInterestEmbedding(userId: string, conversationContext: string): Promise<void> {
+export async function updateUserInterestEmbedding(userId: string, conversationContext: string, existingWeightedInterests?: string): Promise<void> {
     const database = initializeDatabase();
     if (!database) {
         console.error('Database not available');
@@ -51,8 +51,8 @@ export async function updateUserInterestEmbedding(userId: string, conversationCo
     }
 
     try {
-        // Generate weighted interest profile from conversation context
-        const weightedInterests = await generateWeightedInterests(conversationContext);
+        // Generate weighted interest profile from conversation context and existing interests
+        const weightedInterests = await generateWeightedInterests(conversationContext, existingWeightedInterests);
 
         // Use weighted interests for embedding generation
         const embedding = await generateEmbedding(weightedInterests);
@@ -406,7 +406,7 @@ Format as: \"Activity1 (weight), Activity2 (weight), Category1 (weight), Skill (
 /**
  * Generate a weighted activity-based interest profile for a user
  */
-export async function generateWeightedInterests(conversationContext: string): Promise<string> {
+export async function generateWeightedInterests(conversationContext: string, existingWeightedInterests?: string): Promise<string> {
     const { text } = await generateText({
         model: openai("gpt-4o-mini"),
         messages: [
@@ -416,12 +416,14 @@ export async function generateWeightedInterests(conversationContext: string): Pr
             },
             {
                 role: "user",
-                content: `Based on this user's conversation history: "${conversationContext}"
+                content: `${existingWeightedInterests ? `Existing weighted interests: ${existingWeightedInterests}\n\n` : ''}Based on this user's conversation history: "${conversationContext}"
 
 Generate ONLY a weighted activity profile with weights (0.0-1.0) indicating how important each activity is to them. Focus on:
 - Specific activities they mention (e.g., "BJJ (0.8)", "Filmmaking (0.6)")
 - Activity categories (e.g., "Combat Sports (0.7)", "Creative (0.5)")
 - Lifestyle factors (e.g., "Athletic (0.8)", "Technical (0.4)")
+
+${existingWeightedInterests ? 'IMPORTANT: Consider both existing interests and new conversation context. Update weights based on new information while preserving important existing interests.' : ''}
 
 CRITICAL: Return ONLY the weighted activities in this exact format:
 Activity1 (weight), Activity2 (weight), Category1 (weight), Lifestyle (weight)

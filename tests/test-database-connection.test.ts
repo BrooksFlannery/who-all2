@@ -70,10 +70,12 @@ describe('Database Connection and User Data', () => {
             expect(firstUser).toHaveProperty('id');
             expect(firstUser).toHaveProperty('name');
             expect(firstUser).toHaveProperty('email');
-            expect(firstUser).toHaveProperty('userInterestSummary');
+            expect(firstUser).toHaveProperty('weightedInterests');
             expect(firstUser).toHaveProperty('interestEmbedding');
-            expect(firstUser.interestEmbedding).toBeDefined();
-            expect(firstUser.interestEmbedding).not.toBeNull();
+            expect(firstUser).toHaveProperty('createdAt');
+            expect(firstUser).toHaveProperty('updatedAt');
+
+            console.log('✅ Database connection and schema validation passed');
         });
 
         it('should have valid interest embedding format', async () => {
@@ -148,11 +150,11 @@ describe('Database Connection and User Data', () => {
             const users = await db.select().from(user).limit(5);
 
             users.forEach((user, index) => {
-                expect(user.userInterestSummary).toBeDefined();
-                expect(typeof user.userInterestSummary).toBe('string');
+                expect(user.weightedInterests).toBeDefined();
+                expect(typeof user.weightedInterests).toBe('string');
 
-                if (user.userInterestSummary.length > 0) {
-                    console.log(`👤 User ${index + 1} interests: ${user.userInterestSummary.substring(0, 100)}...`);
+                if (user.weightedInterests && user.weightedInterests.length > 0) {
+                    console.log(`👤 User ${index + 1} interests: ${user.weightedInterests.substring(0, 100)}...`);
                 }
             });
         });
@@ -189,4 +191,6 @@ describe('Database Connection and User Data', () => {
             });
         });
     });
+
+
 }); 
