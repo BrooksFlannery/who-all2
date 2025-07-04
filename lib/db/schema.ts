@@ -85,6 +85,13 @@ export const event = pgTable("event", {
     location: jsonb("location").notNull(), // { lat: number, lng: number, neighborhood?: string }
     description: text("description").notNull(),
     categories: text("categories").array().notNull(), // Array of categories instead of single category
+
+    // New Google Places fields
+    venue: jsonb("venue"),                    // Google Places venue data
+    venueType: text("venue_type"),            // Google type (gym, restaurant, park)
+    venueRating: integer("venue_rating"),     // Google rating (1-5)
+    venuePriceLevel: integer("venue_price_level"), // Google price level (1-4)
+
     hostId: text("host_id").references(() => user.id), // Optional - for user-hosted events
     embedding: text("embedding"), // VECTOR(1536) - will be cast in SQL
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

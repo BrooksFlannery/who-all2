@@ -13,12 +13,14 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "npx tsx scripts/seed-events.ts",
     "generate-pseudo-events": "npx tsx scripts/generate-pseudo-events.ts",
+    "test-google-places": "npx tsx scripts/test-google-places.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:chat-summarization": "vitest run tests/test-chat-summarization.test.ts",
     "test:api-endpoints": "vitest run tests/test-api-endpoints.test.ts",
     "test:interest-schemas": "vitest run tests/test-interest-schemas.test.ts",
     "test:zod": "vitest run tests/test-zod.test.ts",
+    "test:pseudo-events": "vitest run tests/test-pseudo-events.test.ts",
     "test:all": "vitest run"
   },
   "dependencies": {
@@ -31,6 +33,7 @@
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.1.6",
     "ai": "^4.3.16",
+    "axios": "^1.10.0",
     "better-auth": "^1.2.12",
     "drizzle-orm": "^0.44.2",
     "expo": "~53.0.13",

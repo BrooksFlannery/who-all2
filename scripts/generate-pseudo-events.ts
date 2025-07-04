@@ -23,6 +23,7 @@ import {
     PseudoEvent,
     UserCluster
 } from '../lib/pseudo-events';
+import { performSemanticVenueTypeMatching } from '../lib/semantic-venue-matching';
 import { validateEnv } from '../lib/validation';
 
 // Validate environment variables
@@ -322,6 +323,8 @@ async function generatePseudoEvents(): Promise<EventGenerationResult> {
                         radiusMeters: EVENT_CONFIG.DEFAULT_RADIUS_METERS
                     },
                     venueTypeQuery: '', // Will be filled in next step
+                    googleVenueTypes: [], // Will be filled in next step
+                    venueTypeConfidence: 0, // Will be filled in next step
                     estimatedAttendees: EVENT_CONFIG.DEFAULT_ATTENDEES,
                     clusterUserIds: cluster.userIds,
                     generatedFrom: {
@@ -346,9 +349,14 @@ async function generatePseudoEvents(): Promise<EventGenerationResult> {
                 const descriptions = pseudoEvents.map(pe => pe.description);
                 const venueTypes = await extractVenueTypes(descriptions);
 
-                // Step 9: Update pseudo-events with venue types
+                // Step 9: Perform semantic venue type matching
+                const semanticResults = await performSemanticVenueTypeMatching(venueTypes);
+
+                // Step 10: Update pseudo-events with venue types and semantic matching results
                 pseudoEvents.forEach((pe, index) => {
                     pe.venueTypeQuery = venueTypes[index] || LOCATION_CONFIG.DEFAULT_VENUE_TYPE; // Default fallback
+                    pe.googleVenueTypes = semanticResults.googleVenueTypes[index] || [];
+                    pe.venueTypeConfidence = semanticResults.venueTypeConfidences[index] || 0;
                 });
             } catch (error) {
                 const errorMsg = `Error extracting venue types: ${error}`;
@@ -422,12 +430,8 @@ async function main() {
     if (result.pseudoEvents.length > 0) {
         console.log('\n🎉 Generated Pseudo-Events:');
         result.pseudoEvents.forEach((event, index) => {
-            console.log(`\n${index + 1}. ${event.title}`);
-            console.log(`   📍 Location: ${event.targetLocation.center.lat}, ${event.targetLocation.center.lng}`);
-            console.log(`   🏢 Venue: ${event.venueTypeQuery}`);
-            console.log(`   👥 Attendees: ${event.estimatedAttendees}`);
-            console.log(`   🏷️ Categories: ${event.categories.join(', ')}`);
-            console.log(`   📝 Description: ${event.description.substring(0, 100)}...`);
+            console.log(`\n${index + 1}. Complete Event Data:`);
+            console.log(JSON.stringify(event, null, 2));
         });
     }
 
