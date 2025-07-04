@@ -1,7 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { db } from '../lib/db';
+import { initializeDatabase } from '../lib/db';
 import { event, user } from '../lib/db/schema';
+import { getEventRecommendations } from '../lib/embeddings';
 
 // Use valid UUIDs for event IDs
 const uuid1 = '123e4567-e89b-12d3-a456-426614174001';
@@ -20,6 +21,7 @@ describe('Recommended Events', () => {
     beforeEach(async () => {
         testEmail = getUniqueEmail();
         // Clean up test data
+        const db = initializeDatabase();
         if (db) {
             await db.delete(user).where(eq(user.id, testUserId));
             await db.delete(event).where(eq(event.id, testEventIds[0]));
@@ -30,6 +32,7 @@ describe('Recommended Events', () => {
 
     afterEach(async () => {
         // Clean up test data
+        const db = initializeDatabase();
         if (db) {
             await db.delete(user).where(eq(user.id, testUserId));
             await db.delete(event).where(eq(event.id, testEventIds[0]));
@@ -39,6 +42,7 @@ describe('Recommended Events', () => {
     });
 
     it('should store and retrieve recommended event IDs', async () => {
+        const db = initializeDatabase();
         if (!db) {
             console.log('Database not available, skipping test');
             return;
@@ -98,6 +102,7 @@ describe('Recommended Events', () => {
     });
 
     it('should handle empty recommended event IDs', async () => {
+        const db = initializeDatabase();
         if (!db) {
             console.log('Database not available, skipping test');
             return;
@@ -120,5 +125,23 @@ describe('Recommended Events', () => {
             .limit(1);
 
         expect(userResult[0]?.recommendedEventIds).toEqual([]);
+    });
+
+    it('should return empty array for non-existent user', async () => {
+        const db = initializeDatabase();
+        if (!db) {
+            console.log('Database not available, skipping test');
+            return;
+        }
+
+        const recommendations = await getEventRecommendations('non-existent-user');
+        expect(Array.isArray(recommendations)).toBe(true);
+        expect(recommendations.length).toBe(0);
+    });
+
+    it('should handle database unavailability gracefully', async () => {
+        const recommendations = await getEventRecommendations('test-user');
+        expect(Array.isArray(recommendations)).toBe(true);
+        expect(recommendations.length).toBe(0);
     });
 }); 

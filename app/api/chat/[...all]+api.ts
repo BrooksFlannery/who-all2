@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { initializeDatabase } from "@/lib/db";
 import { message, user } from "@/lib/db/schema";
 import { updateUserInterestEmbedding } from "@/lib/embeddings";
 import { chatRequestSchema, chatResponseSchema } from "@/lib/schemas";
@@ -19,7 +19,8 @@ async function triggerSummarization(userId: string) {
     try {
         console.log('🔄 Background summarization triggered for user:', userId);
 
-        // Check if database is available
+        // Initialize and check if database is available
+        const db = initializeDatabase();
         if (!db) {
             console.warn('❌ Database not available for background summarization');
             return;
@@ -59,7 +60,7 @@ async function triggerSummarization(userId: string) {
         console.log('🔄 Preparing conversation context...');
         // Prepare conversation context for AI
         const conversationContext = unsummarizedMessages
-            .map(msg => `${msg.role}: ${msg.content}`)
+            .map((msg: any) => `${msg.role}: ${msg.content}`)
             .join('\n');
 
         console.log(`💬 Conversation context prepared (${conversationContext.length} characters)`);
@@ -147,7 +148,8 @@ export async function POST(req: Request) {
         return new Response("Unauthorized", { status: 401 });
     }
 
-    // Step 2: Verify database availability
+    // Step 2: Initialize and verify database availability
+    const db = initializeDatabase();
     if (!db) {
         return new Response("Database not available", { status: 500 });
     }
@@ -206,6 +208,7 @@ export async function POST(req: Request) {
             ...messages, // Include the conversation history
         ],
         onFinish: async (completion) => {
+            const db = initializeDatabase();
             if (!db) {
                 return;
             }
@@ -243,7 +246,8 @@ export async function GET(req: Request) {
         return new Response("Unauthorized", { status: 401 });
     }
 
-    // Step 2: Verify database availability
+    // Step 2: Initialize and verify database availability
+    const db = initializeDatabase();
     if (!db) {
         return new Response("Database not available", { status: 500 });
     }

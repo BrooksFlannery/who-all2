@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { initializeDatabase } from "@/lib/db";
 import { message, user } from "@/lib/db/schema";
 import { updateUserInterestEmbedding } from "@/lib/embeddings";
 import { summarizationResponseSchema } from "@/lib/schemas";
@@ -33,8 +33,9 @@ export async function POST(req: Request) {
     }
     console.log('✅ Authentication successful for user:', session.user.id);
 
-    // Step 2: Verify database availability
+    // Step 2: Initialize and verify database availability
     console.log('🗄️ Step 2: Checking database availability...');
+    const db = initializeDatabase();
     if (!db) {
         console.log('❌ Database not available');
         return new Response("Database not available", { status: 500 });

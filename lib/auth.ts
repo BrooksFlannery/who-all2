@@ -1,15 +1,22 @@
 import { expo } from "@better-auth/expo";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { db } from "./db";
+import { initializeDatabase } from "./db";
 import { schema } from "./db/schema";
+
+// Initialize the database before creating the auth configuration
+const db = initializeDatabase();
+
+if (!db) {
+    throw new Error("Failed to initialize database for authentication");
+}
 
 export const auth = betterAuth({
     emailAndPassword: {
         enabled: true,
         requireEmailVerification: false, // Set to true in production
     },
-    database: drizzleAdapter(db as any, {
+    database: drizzleAdapter(db, {
         provider: "pg",
         schema
     }),

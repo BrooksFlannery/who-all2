@@ -1,10 +1,32 @@
 import { neon } from '@neondatabase/serverless';
 import 'dotenv/config';
-import { eq } from 'drizzle-orm';
+import { eq, like } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/neon-http';
 
 import { message, user } from '../lib/db/schema';
 import { validateEnv } from '../lib/validation';
+
+// CLI argument parsing
+function parseArguments() {
+    const args = process.argv.slice(2);
+    const userCountArg = args.find(arg => arg.startsWith('--users=') || arg.startsWith('-u='));
+
+    if (userCountArg) {
+        const count = parseInt(userCountArg.split('=')[1]);
+        if (isNaN(count) || count < 1) {
+            console.error('❌ Invalid user count. Must be a positive number.');
+            console.error('Usage: npm run seed:users -- --users=10');
+            process.exit(1);
+        }
+        return count;
+    }
+
+    // Default to all users if no argument provided
+    return -1; // -1 means "all users"
+}
+
+// Parse user count from CLI arguments
+const requestedUserCount = parseArguments();
 
 // Validate environment variables
 const env = validateEnv();
@@ -34,6 +56,64 @@ interface MockMessage {
     role: 'system' | 'user' | 'assistant';
     content: string;
     createdAt: Date;
+}
+
+/**
+ * Clean up existing seeded users and their associated messages
+ * @returns Promise<number> - Number of users cleaned up
+ */
+async function cleanupExistingSeededUsers(): Promise<number> {
+    if (!db) {
+        throw new Error('Database not available');
+    }
+
+    try {
+        // Find all users with seeded pattern
+        const seededUsers = await db.select()
+            .from(user)
+            .where(like(user.id, 'user-%'));
+
+        if (seededUsers.length === 0) {
+            console.log('🧹 No existing seeded users found');
+            return 0;
+        }
+
+        // Delete associated messages first
+        for (const seededUser of seededUsers) {
+            await db.delete(message)
+                .where(eq(message.userId, seededUser.id));
+        }
+
+        // Delete seeded users
+        await db.delete(user)
+            .where(like(user.id, 'user-%'));
+
+        console.log(`🧹 Cleaned up ${seededUsers.length} existing seeded users and their messages`);
+        return seededUsers.length;
+    } catch (error) {
+        console.error('❌ Error during cleanup:', error);
+        throw error;
+    }
+}
+
+/**
+ * Get a subset of mock users based on the requested count
+ * @param count - Number of users to return (-1 for all users)
+ * @returns Array of mock users
+ */
+function getUsersToSeed(count: number): MockUser[] {
+    if (count === -1) {
+        // Return all users
+        return mockUsers;
+    }
+
+    if (count > mockUsers.length) {
+        console.warn(`⚠️ Requested ${count} users, but only ${mockUsers.length} are available. Using all users.`);
+        return mockUsers;
+    }
+
+    // Return first N users, maintaining diversity across clusters
+    return mockUsers.slice(0, count);
 }
 
 // Mock user data - diverse profiles across different interest clusters
@@ -643,13 +723,16 @@ function generateUserMessages(mockUser: MockUser): MockMessage[] {
  * Insert users and their messages into the database
  */
 async function insertUsersWithMessages() {
+    const usersToSeed = getUsersToSeed(requestedUserCount);
+    const userCount = requestedUserCount === -1 ? 'all' : requestedUserCount;
+
     console.log('🚀 Starting user seeding process...');
-    console.log(`📊 Creating ${mockUsers.length} mock users with messages`);
+    console.log(`📊 Creating ${usersToSeed.length} mock users with messages (requested: ${userCount})`);
 
     try {
         // Step 1: Insert users
         console.log('\n👥 Step 1: Inserting users...');
-        const userInsertData = mockUsers.map(u => ({
+        const userInsertData = usersToSeed.map(u => ({
             id: u.id,
             name: u.name,
             email: u.email,
@@ -663,13 +746,13 @@ async function insertUsersWithMessages() {
         }));
 
         await db.insert(user).values(userInsertData);
-        console.log(`✅ Successfully inserted ${mockUsers.length} users`);
+        console.log(`✅ Successfully inserted ${usersToSeed.length} users`);
 
         // Step 2: Insert messages for each user
         console.log('\n💬 Step 2: Inserting messages...');
         let totalMessages = 0;
 
-        for (const mockUser of mockUsers) {
+        for (const mockUser of usersToSeed) {
             const messages = generateUserMessages(mockUser);
             const messageInsertData = messages.map(m => ({
                 userId: mockUser.id,
@@ -686,7 +769,7 @@ async function insertUsersWithMessages() {
 
         console.log(`✅ Successfully inserted ${totalMessages} total messages`);
 
-        return { usersCreated: mockUsers.length, messagesCreated: totalMessages };
+        return { usersCreated: usersToSeed.length, messagesCreated: totalMessages };
 
     } catch (error: any) {
         console.error('❌ Error inserting users and messages:', error);
@@ -700,6 +783,8 @@ async function insertUsersWithMessages() {
 async function validateUserCreation() {
     console.log('\n🔍 Step 3: Validating data creation...');
 
+    const usersToSeed = getUsersToSeed(requestedUserCount);
+
     try {
         // Check users
         const createdUsers = await db.select().from(user);
@@ -710,7 +795,7 @@ async function validateUserCreation() {
         console.log(`   ✅ Messages in database: ${createdMessages.length}`);
 
         // Check specific users
-        for (const mockUser of mockUsers) {
+        for (const mockUser of usersToSeed) {
             const dbUser = await db.select().from(user).where(eq(user.id, mockUser.id)).limit(1);
             if (dbUser.length === 0) {
                 throw new Error(`User ${mockUser.name} was not created`);
@@ -740,30 +825,34 @@ function displaySummary() {
     console.log('\n📊 SEEDING SUMMARY:');
     console.log('='.repeat(50));
 
+    const usersToSeed = getUsersToSeed(requestedUserCount);
+
     // Group users by interest clusters
     const clusters = {
-        'Fitness & Wellness': mockUsers.filter(u => u.interests.some(i => ['yoga', 'meditation', 'weightlifting', 'crossfit', 'pilates', 'running', 'cycling', 'mental health', 'therapy', 'wellness coaching'].includes(i))),
-        'Creative Arts': mockUsers.filter(u => u.interests.some(i => ['painting', 'photography', 'art galleries', 'design', 'sculpture', 'digital art', 'textile art', 'fashion design', 'style consulting'].includes(i))),
-        'Technology': mockUsers.filter(u => u.interests.some(i => ['programming', 'AI', 'data science', 'tech meetups', 'blockchain', 'cybersecurity', 'mobile development', 'video games', 'esports'].includes(i))),
-        'Food & Dining': mockUsers.filter(u => u.interests.some(i => ['cooking', 'restaurants', 'vegan cooking', 'food culture', 'baking', 'middle eastern cuisine', 'bbq', 'arabic language', 'international cuisine'].includes(i))),
-        'Music & Entertainment': mockUsers.filter(u => u.interests.some(i => ['live music', 'dancing', 'jazz', 'concerts', 'hip hop', 'classical music', 'rock music', 'tabletop games', 'roleplaying'].includes(i))),
-        'Education & Learning': mockUsers.filter(u => u.interests.some(i => ['academic research', 'lectures', 'book clubs', 'language learning', 'workshops', 'skill building', 'professional development'].includes(i))),
-        'Outdoor & Adventure': mockUsers.filter(u => u.interests.some(i => ['hiking', 'camping', 'rock climbing', 'kayaking', 'water sports', 'skiing', 'snowboarding', 'outdoor adventures'].includes(i))),
-        'Business & Entrepreneurship': mockUsers.filter(u => u.interests.some(i => ['startup networking', 'business strategy', 'entrepreneurship', 'consulting', 'corporate events', 'investing'].includes(i))),
-        'Science & Research': mockUsers.filter(u => u.interests.some(i => ['scientific research', 'laboratory work', 'astronomy', 'space exploration', 'medical research', 'healthcare innovation'].includes(i))),
-        'Social Justice & Activism': mockUsers.filter(u => u.interests.some(i => ['social justice', 'activism', 'environmental activism', 'climate change', 'sustainability', 'community organizing'].includes(i))),
-        'Travel & Culture': mockUsers.filter(u => u.interests.some(i => ['international travel', 'cultural exchange', 'middle eastern culture', 'cultural heritage', 'global cultures', 'language immersion'].includes(i)))
+        'Fitness & Wellness': usersToSeed.filter(u => u.interests.some(i => ['yoga', 'meditation', 'weightlifting', 'crossfit', 'pilates', 'running', 'cycling', 'mental health', 'therapy', 'wellness coaching'].includes(i))),
+        'Creative Arts': usersToSeed.filter(u => u.interests.some(i => ['painting', 'photography', 'art galleries', 'design', 'sculpture', 'digital art', 'textile art', 'fashion design', 'style consulting'].includes(i))),
+        'Technology': usersToSeed.filter(u => u.interests.some(i => ['programming', 'AI', 'data science', 'tech meetups', 'blockchain', 'cybersecurity', 'mobile development', 'video games', 'esports'].includes(i))),
+        'Food & Dining': usersToSeed.filter(u => u.interests.some(i => ['cooking', 'restaurants', 'vegan cooking', 'food culture', 'baking', 'middle eastern cuisine', 'bbq', 'arabic language', 'international cuisine'].includes(i))),
+        'Music & Entertainment': usersToSeed.filter(u => u.interests.some(i => ['live music', 'dancing', 'jazz', 'concerts', 'hip hop', 'classical music', 'rock music', 'tabletop games', 'roleplaying'].includes(i))),
+        'Education & Learning': usersToSeed.filter(u => u.interests.some(i => ['academic research', 'lectures', 'book clubs', 'language learning', 'workshops', 'skill building', 'professional development'].includes(i))),
+        'Outdoor & Adventure': usersToSeed.filter(u => u.interests.some(i => ['hiking', 'camping', 'rock climbing', 'kayaking', 'water sports', 'skiing', 'snowboarding', 'outdoor adventures'].includes(i))),
+        'Business & Entrepreneurship': usersToSeed.filter(u => u.interests.some(i => ['startup networking', 'business strategy', 'entrepreneurship', 'consulting', 'corporate events', 'investing'].includes(i))),
+        'Science & Research': usersToSeed.filter(u => u.interests.some(i => ['scientific research', 'laboratory work', 'astronomy', 'space exploration', 'medical research', 'healthcare innovation'].includes(i))),
+        'Social Justice & Activism': usersToSeed.filter(u => u.interests.some(i => ['social justice', 'activism', 'environmental activism', 'climate change', 'sustainability', 'community organizing'].includes(i))),
+        'Travel & Culture': usersToSeed.filter(u => u.interests.some(i => ['international travel', 'cultural exchange', 'middle eastern culture', 'cultural heritage', 'global cultures', 'language immersion'].includes(i)))
     };
 
     Object.entries(clusters).forEach(([clusterName, users]) => {
-        console.log(`   ${clusterName}: ${users.length} users`);
-        users.forEach(user => {
-            console.log(`     • ${user.name} (${user.interests.join(', ')})`);
-        });
+        if (users.length > 0) {
+            console.log(`   ${clusterName}: ${users.length} users`);
+            users.forEach(user => {
+                console.log(`     • ${user.name} (${user.interests.join(', ')})`);
+            });
+        }
     });
 
     console.log('\n📍 Geographic Distribution:');
-    const locations = mockUsers.map(u => `${u.name}: ${u.location.lat.toFixed(4)}, ${u.location.lng.toFixed(4)}`);
+    const locations = usersToSeed.map(u => `${u.name}: ${u.location.lat.toFixed(4)}, ${u.location.lng.toFixed(4)}`);
     locations.forEach(loc => console.log(`   • ${loc}`));
 
     console.log('\n🎯 Next Steps:');
@@ -780,6 +869,13 @@ async function seedUsers() {
     console.log('='.repeat(50));
 
     try {
+        // Step 0: Clean up existing seeded users
+        console.log('\n🧹 Step 0: Cleaning up existing seeded users...');
+        const cleanedUp = await cleanupExistingSeededUsers();
+        if (cleanedUp > 0) {
+            console.log(`   ✅ Cleaned up ${cleanedUp} existing seeded users`);
+        }
+
         // Step 1: Insert users and messages
         const result = await insertUsersWithMessages();
 

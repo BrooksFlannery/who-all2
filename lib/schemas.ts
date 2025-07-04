@@ -4,6 +4,7 @@ import { z } from 'zod';
 export const envSchema = z.object({
     DATABASE_URL: z.string().url(),
     OPENAI_API_KEY: z.string().min(1),
+    GOOGLE_PLACES_API_KEY: z.string().min(1),
 });
 
 // Chat message validation

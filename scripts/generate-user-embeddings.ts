@@ -14,19 +14,9 @@ import { generateText } from 'ai';
 import 'dotenv/config';
 import { eq, isNull } from 'drizzle-orm';
 
-import { db } from '../lib/db/index';
+import { initializeDatabase } from '../lib/db/index';
 import { message, user } from '../lib/db/schema';
 import { updateUserInterestEmbedding } from '../lib/embeddings';
-import { validateEnv } from '../lib/validation';
-
-// Validate environment variables
-const env = validateEnv();
-const databaseUrl = env.DATABASE_URL;
-
-if (!databaseUrl) {
-    console.error('DATABASE_URL is not defined');
-    process.exit(1);
-}
 
 /**
  * Generate interest summary for a user based on their messages
@@ -34,12 +24,13 @@ if (!databaseUrl) {
 async function generateUserInterestSummary(userId: string): Promise<string> {
     console.log(`🔍 Generating interest summary for user ${userId}...`);
 
-    if (!db) {
+    const database = initializeDatabase();
+    if (!database) {
         throw new Error('Database not available');
     }
 
     // Get all messages for this user
-    const userMessages = await db
+    const userMessages = await database
         .select()
         .from(message)
         .where(eq(message.userId, userId))
@@ -53,7 +44,7 @@ async function generateUserInterestSummary(userId: string): Promise<string> {
     }
 
     // Get existing user interest summary for context
-    const currentUser = await db
+    const currentUser = await database
         .select({ userInterestSummary: user.userInterestSummary })
         .from(user)
         .where(eq(user.id, userId))
@@ -123,10 +114,11 @@ async function processUser(userId: string): Promise<boolean> {
 
         // Step 2: Update user's interest summary in database
         console.log('💾 Updating user interest summary...');
-        if (!db) {
+        const database = initializeDatabase();
+        if (!database) {
             throw new Error('Database not available');
         }
-        await db
+        await database
             .update(user)
             .set({ userInterestSummary: summary })
             .where(eq(user.id, userId));
@@ -156,12 +148,13 @@ async function generateUserEmbeddings(): Promise<void> {
     let errorCount = 0;
 
     try {
-        if (!db) {
+        const database = initializeDatabase();
+        if (!database) {
             throw new Error('Database not available');
         }
 
         // Get all users that don't have interest embeddings yet
-        const usersWithoutEmbeddings = await db
+        const usersWithoutEmbeddings = await database
             .select()
             .from(user)
             .where(isNull(user.interestEmbedding));
@@ -194,7 +187,7 @@ async function generateUserEmbeddings(): Promise<void> {
         console.log(`📈 Average time per user: ${(duration / usersWithoutEmbeddings.length).toFixed(2)}s`);
 
         // Final validation
-        const usersWithEmbeddings = await db
+        const usersWithEmbeddings = await database
             .select()
             .from(user)
             .where(isNull(user.interestEmbedding));
