@@ -1,8 +1,10 @@
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/components/AuthProvider';
@@ -28,22 +30,26 @@ function RootLayoutContent() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <SocketProvider>
-        <Stack>
-          {user ? (
-            [
-              <Stack.Screen key="tabs" name="(tabs)" options={{ headerShown: false }} />,
-              <Stack.Screen key="nf" name="+not-found" />
-            ]
-          ) : (
-            [
-              <Stack.Screen key="signin" name="(auth)/sign-in" options={{ headerShown: false }} />
-            ]
-          )}
-        </Stack>
-      </SocketProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <BottomSheetModalProvider>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <SocketProvider>
+            <Stack>
+              {user ? (
+                [
+                  <Stack.Screen key="tabs" name="(tabs)" options={{ headerShown: false }} />,
+                  <Stack.Screen key="nf" name="+not-found" />
+                ]
+              ) : (
+                [
+                  <Stack.Screen key="signin" name="(auth)/sign-in" options={{ headerShown: false }} />
+                ]
+              )}
+            </Stack>
+          </SocketProvider>
+        </ThemeProvider>
+      </BottomSheetModalProvider>
+    </GestureHandlerRootView>
   );
 }
 

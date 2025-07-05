@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { insertEvents } from '../lib/db/events';
 import { generateRealEvent } from '../lib/event-generation';
 import { assignSeedUsersToEvents } from './assign-seed-users-to-events';
 import { generatePseudoEvents } from './generate-pseudo-events';
@@ -31,14 +32,28 @@ async function main() {
         }
     }
 
-    // Step 3: Print all real event objects
-    console.log('\n🎉 Full Real Events Generated:');
+    // Step 3: Save events to database
+    console.log(`\n💾 Step 3: Saving ${realEvents.length} events to database...`);
+    let savedEventIds: string[] = [];
+    try {
+        savedEventIds = await insertEvents(realEvents);
+        console.log(`✅ Successfully saved ${savedEventIds.length} events to database`);
+    } catch (error) {
+        console.error('❌ Failed to save events to database:', error);
+        process.exit(1);
+    }
+
+    // Step 4: Print summary of saved events
+    console.log('\n🎉 Events saved to database:');
     realEvents.forEach((event, idx) => {
-        console.log(`\n${idx + 1}. Complete Real Event Data:`);
-        console.log(JSON.stringify(event, null, 2));
+        console.log(`\n${idx + 1}. ${event.title}`);
+        console.log(`   📍 ${event.venue?.name || 'No venue'}`);
+        console.log(`   📅 ${event.date.toLocaleDateString()}`);
+        console.log(`   🏷️  ${event.categories.join(', ')}`);
+        console.log(`   🆔 ${savedEventIds[idx]}`);
     });
 
-    // Step 4: Automatically assign seed users to events
+    // Step 5: Automatically assign seed users to events
     console.log('\n👥 Step 4: Automatically assigning seed users to events...');
     const assignmentResult = await assignSeedUsersToEvents();
 

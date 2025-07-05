@@ -162,7 +162,6 @@ export default function EventsScreen() {
       {/* Events List */}
       {filteredEvents.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyStateEmoji}>🎉</Text>
           <Text style={styles.emptyStateText}>
             {selectedCategory === 'Recommended'
               ? 'No recommended events found'

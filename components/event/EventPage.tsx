@@ -1,5 +1,6 @@
 import { useAuth } from '@/components/AuthProvider';
-import { ChatSection } from '@/components/event/ChatSection';
+import { ChatBottomBar } from '@/components/event/ChatBottomBar';
+import { ChatDrawer } from '@/components/event/ChatDrawer';
 import { EventDetails } from '@/components/event/EventDetails';
 import { EventHeader } from '@/components/event/EventHeader';
 import { ParticipantSection } from '@/components/event/ParticipantSection';
@@ -10,7 +11,7 @@ import { useBackgroundColor, useTextColor } from '@/hooks/useThemeColor';
 import { Event } from '@/lib/db/types';
 import { EventMessage, TypingUser } from '@/lib/socket-client';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, RefreshControl, StyleSheet, View } from 'react-native';
 import Animated, {
     useAnimatedRef,
@@ -51,6 +52,7 @@ export const EventPage = React.memo(function EventPage() {
     const {
         joinEventRoom,
         leaveEventRoom,
+        sendMessage,
         onMessage,
         onUserTyping,
         onUserStoppedTyping,
@@ -64,7 +66,7 @@ export const EventPage = React.memo(function EventPage() {
     const [interested, setInterested] = useState<any[]>([]);
     const [userParticipation, setUserParticipation] = useState<'attending' | 'interested' | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [isJoining, setIsJoining] = useState(false);
+    const [joiningStatus, setJoiningStatus] = useState<'attending' | 'interested' | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [participationError, setParticipationError] = useState<string | null>(null);
 
@@ -73,6 +75,9 @@ export const EventPage = React.memo(function EventPage() {
     const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
     const [isLoadingMessages, setIsLoadingMessages] = useState(false);
     const [hasMoreMessages, setHasMoreMessages] = useState(true);
+
+    // Chat drawer ref
+    const chatDrawerRef = useRef<{ present: () => void; dismiss: () => void }>(null);
 
     const backgroundColor = useBackgroundColor();
     const textColor = useTextColor();
@@ -93,6 +98,15 @@ export const EventPage = React.memo(function EventPage() {
 
     // Memoize canSendMessage to prevent unnecessary re-renders
     const canSendMessage = useMemo(() => userParticipation !== null, [userParticipation]);
+
+    // Chat drawer handlers
+    const handleOpenChat = () => {
+        chatDrawerRef.current?.present();
+    };
+
+    const handleCloseChat = () => {
+        chatDrawerRef.current?.dismiss();
+    };
 
     useEffect(() => {
         if (!id) {
@@ -115,7 +129,24 @@ export const EventPage = React.memo(function EventPage() {
         // Set up event listeners
         const unsubscribeMessage = onMessage((message) => {
             if (message.eventId === id) {
-                setMessages(prev => [message, ...prev]);
+                setMessages(prev => {
+                    // Check if we have an optimistic message from the same user with similar content
+                    const optimisticIndex = prev.findIndex(msg =>
+                        msg.id.startsWith('temp-') &&
+                        msg.userId === message.userId &&
+                        msg.content === message.content
+                    );
+
+                    if (optimisticIndex !== -1) {
+                        // Replace optimistic message with real message
+                        const newMessages = [...prev];
+                        newMessages[optimisticIndex] = message;
+                        return newMessages;
+                    } else {
+                        // Add new message at the bottom (newest messages at bottom)
+                        return [...prev, message];
+                    }
+                });
             }
         });
 
@@ -261,7 +292,7 @@ export const EventPage = React.memo(function EventPage() {
     }, [id, isLoadingMessages]);
 
     /**
-     * Sends a chat message to the event
+     * Handles sending a message to the event chat
      * 
      * @async
      * @param {string} content - The message content to send
@@ -270,30 +301,56 @@ export const EventPage = React.memo(function EventPage() {
     const handleSendMessage = useCallback(async (content: string) => {
         if (!id || !user) return;
 
+        // Create optimistic message
+        const optimisticMessage: EventMessage = {
+            id: `temp-${Date.now()}`,
+            eventId: id,
+            userId: user.id,
+            content: content,
+            userName: user.name || 'You',
+            userImage: undefined, // Will be filled by server response
+            createdAt: new Date().toISOString(),
+        };
+
+        // Add optimistic message immediately to UI (at the bottom for newest messages)
+        setMessages(prev => [...prev, optimisticMessage]);
+
         try {
-            const response = await fetch(`/api/events/${id}/messages`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ content }),
-            });
+            // Send via socket if connected
+            if (isConnected) {
+                sendMessage(id, content);
+            } else {
+                // Fallback to API if socket not connected
+                const response = await fetch(`/api/events/${id}/messages`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ content }),
+                });
 
-            if (!response.ok) {
-                throw new Error('Failed to send message');
+                if (!response.ok) {
+                    throw new Error('Failed to send message');
+                }
+
+                const result = await response.json();
+
+                // Replace optimistic message with real message
+                setMessages(prev => prev.map(msg =>
+                    msg.id === optimisticMessage.id ? result.message : msg
+                ));
             }
-
-            // Message will be added via Socket.IO event
-            // No need to manually add it here
         } catch (err) {
             console.error('Error sending message:', err);
+            // Remove optimistic message on error
+            setMessages(prev => prev.filter(msg => msg.id !== optimisticMessage.id));
             Alert.alert('Error', 'Failed to send message. Please try again.');
         }
-    }, [id, user]);
+    }, [id, user, isConnected, sendMessage]);
 
     const handleLoadMoreMessages = useCallback(() => {
         if (messages.length > 0) {
-            const oldestMessage = messages[messages.length - 1];
+            const oldestMessage = messages[0]; // Oldest message is at the beginning
             const beforeDate = new Date(oldestMessage.createdAt);
             loadMessages(beforeDate);
         }
@@ -307,14 +364,14 @@ export const EventPage = React.memo(function EventPage() {
      * @throws {Error} When participation update fails
      */
     const handleJoinEvent = useCallback(async (status: 'attending' | 'interested' | null) => {
-        if (!id || isJoining) return;
+        if (!id || joiningStatus) return;
 
         // Store previous state for rollback on error
         const previousParticipation = userParticipation;
         const previousEvent = event;
 
         try {
-            setIsJoining(true);
+            setJoiningStatus(status);
             setParticipationError(null);
 
             // Optimistically update UI
@@ -365,8 +422,11 @@ export const EventPage = React.memo(function EventPage() {
                     interestedCount: result.newCounts.interested,
                 });
 
-                // Refresh participant lists to get updated data
-                await fetchEventData();
+                // Update participant lists directly from response if available
+                if (result.attendees && result.interested) {
+                    setAttendees(result.attendees);
+                    setInterested(result.interested);
+                }
             } else {
                 throw new Error('Failed to update participation');
             }
@@ -389,9 +449,9 @@ export const EventPage = React.memo(function EventPage() {
 
             console.error('Error updating participation:', err);
         } finally {
-            setIsJoining(false);
+            setJoiningStatus(null);
         }
-    }, [id, isJoining, userParticipation, event, fetchEventData]);
+    }, [id, joiningStatus, userParticipation, event, fetchEventData]);
 
     const handleBackPress = useCallback(() => {
         router.back();
@@ -400,10 +460,9 @@ export const EventPage = React.memo(function EventPage() {
     // Memoize loading state
     const loadingState = useMemo(() => ({
         isLoading,
-        isJoining,
         isLoadingMessages,
         hasMoreMessages,
-    }), [isLoading, isJoining, isLoadingMessages, hasMoreMessages]);
+    }), [isLoading, isLoadingMessages, hasMoreMessages]);
 
     if (loadingState.isLoading) {
         return (
@@ -424,15 +483,70 @@ export const EventPage = React.memo(function EventPage() {
                     <Skeleton width={'40%'} height={20} borderRadius={8} style={{ marginBottom: 24 }} />
                     {/* Description Skeleton */}
                     <Skeleton width={'100%'} height={60} borderRadius={8} style={{ marginBottom: 32 }} />
-                    {/* Participant Avatars Skeleton */}
-                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 24 }}>
-                        {[...Array(5)].map((_, i) => (
-                            <Skeleton key={i} width={40} height={40} borderRadius={20} />
-                        ))}
+
+                    {/* Participant Section Skeleton */}
+                    <View style={{ paddingHorizontal: 20, marginBottom: 24 }}>
+                        {/* Attending Section Skeleton */}
+                        <View style={{
+                            marginBottom: 8,
+                            paddingHorizontal: 12,
+                            paddingVertical: 16,
+                            borderRadius: 50,
+                            borderWidth: 1,
+                            borderColor: '#E5E5EA',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            {/* Attendee Avatars Skeleton */}
+                            <View style={{ flex: 1, marginRight: 16, flexDirection: 'row', gap: 8 }}>
+                                {[...Array(4)].map((_, i) => (
+                                    <Skeleton key={i} width={32} height={32} borderRadius={16} />
+                                ))}
+                            </View>
+                            {/* Join Button Skeleton */}
+                            <Skeleton width={80} height={36} borderRadius={18} />
+                        </View>
+
+                        {/* Interested Section Skeleton */}
+                        <View style={{
+                            marginBottom: 8,
+                            paddingHorizontal: 12,
+                            paddingVertical: 16,
+                            borderRadius: 50,
+                            borderWidth: 1,
+                            borderColor: '#E5E5EA',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'space-between'
+                        }}>
+                            {/* Interested Avatars Skeleton */}
+                            <View style={{ flex: 1, marginRight: 16, flexDirection: 'row', gap: 8 }}>
+                                {[...Array(3)].map((_, i) => (
+                                    <Skeleton key={i} width={32} height={32} borderRadius={16} />
+                                ))}
+                            </View>
+                            {/* Join Button Skeleton */}
+                            <Skeleton width={80} height={36} borderRadius={18} />
+                        </View>
                     </View>
-                    {/* Join Buttons Skeleton */}
-                    <Skeleton width={100} height={36} borderRadius={18} style={{ marginBottom: 16 }} />
-                    <Skeleton width={100} height={36} borderRadius={18} />
+
+                    {/* Chat Bottom Bar Skeleton */}
+                    <View style={{
+                        borderTopWidth: 1,
+                        borderTopColor: '#E5E5EA',
+                        paddingHorizontal: 20,
+                        paddingVertical: 16,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                    }}>
+                        <View style={{ flex: 1 }}>
+                            <Skeleton width={'40%'} height={18} borderRadius={4} style={{ marginBottom: 4 }} />
+                            <Skeleton width={'60%'} height={14} borderRadius={4} />
+                        </View>
+                        <Skeleton width={20} height={20} borderRadius={10} />
+                    </View>
                 </View>
             </View>
         );
@@ -485,6 +599,7 @@ export const EventPage = React.memo(function EventPage() {
             <Animated.ScrollView
                 ref={scrollRef}
                 style={styles.scrollView}
+                contentContainerStyle={styles.scrollContent}
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
                 onScroll={onScroll}
@@ -506,7 +621,8 @@ export const EventPage = React.memo(function EventPage() {
                     participants={participants}
                     userParticipation={userParticipation}
                     onJoinEvent={handleJoinEvent}
-                    loading={loadingState.isJoining}
+                    loadingStatus={joiningStatus}
+                    isSignedIn={!!user}
                 />
 
                 {/* Error message for participation */}
@@ -518,21 +634,28 @@ export const EventPage = React.memo(function EventPage() {
                     </View>
                 )}
 
-                {/* Chat Section */}
-                <View style={styles.chatSection}>
-                    <ThemedText style={styles.chatTitle}>Chat</ThemedText>
-                    <ChatSection
-                        eventId={id}
-                        messages={messages}
-                        typingUsers={typingUsers}
-                        onSendMessage={handleSendMessage}
-                        onLoadMoreMessages={handleLoadMoreMessages}
-                        canSendMessage={canSendMessage}
-                        isLoadingMessages={loadingState.isLoadingMessages}
-                        hasMoreMessages={loadingState.hasMoreMessages}
-                    />
-                </View>
+                {/* Chat Bottom Bar - At bottom of page content */}
+                <ChatBottomBar
+                    onPress={handleOpenChat}
+                    messageCount={messages.length}
+                    disabled={!canSendMessage}
+                    showJoinMessage={!userParticipation && !!user}
+                />
             </Animated.ScrollView>
+
+            {/* Chat Drawer */}
+            <ChatDrawer
+                ref={chatDrawerRef}
+                eventId={id}
+                messages={messages}
+                typingUsers={typingUsers}
+                onSendMessage={handleSendMessage}
+                onLoadMoreMessages={handleLoadMoreMessages}
+                canSendMessage={canSendMessage}
+                isLoadingMessages={loadingState.isLoadingMessages}
+                hasMoreMessages={loadingState.hasMoreMessages}
+                isSignedIn={!!user}
+            />
         </View>
     );
 });
@@ -543,6 +666,9 @@ const styles = StyleSheet.create({
     },
     scrollView: {
         flex: 1,
+    },
+    scrollContent: {
+        // No bottom padding needed since ChatBottomBar is now part of content
     },
     backButton: {
         position: 'absolute',
@@ -608,18 +734,5 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#D32F2F',
         textAlign: 'center',
-    },
-    chatSection: {
-        height: 400, // Fixed height for chat section
-        borderTopWidth: 1,
-        borderTopColor: '#E5E5EA',
-    },
-    chatTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E5EA',
     },
 }); 

@@ -139,7 +139,7 @@ Each event should be:
 Format each event as a detailed description.`;
 
     const response = await openai.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.8
     });
@@ -187,7 +187,7 @@ Event descriptions:
 ${eventDescriptions.map((desc, i) => `${i + 1}. ${desc}`).join('\n')}`;
 
     const response = await openai.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-4o-mini',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.3
     });

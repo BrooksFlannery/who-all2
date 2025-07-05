@@ -3,25 +3,25 @@ import { useSocket } from '@/components/providers/SocketProvider';
 import { ThemedText } from '@/components/ThemedText';
 import { useBackgroundColor, useCardBackgroundColor, useTextColor } from '@/hooks/useThemeColor';
 import { EventMessage, TypingUser } from '@/lib/socket-client';
+import { BottomSheetBackdrop, BottomSheetBackdropProps, BottomSheetFlatList, BottomSheetModal, BottomSheetTextInput, BottomSheetView } from '@gorhom/bottom-sheet';
+import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
     ActivityIndicator,
-    FlatList,
-    Keyboard,
+    Dimensions,
     KeyboardAvoidingView,
     Platform,
     StyleSheet,
-    TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
 import { UserAvatar } from './UserAvatar';
 
 /**
- * Props for the ChatSection component
+ * Props for the ChatDrawer component
  */
-interface ChatSectionProps {
+interface ChatDrawerProps {
     eventId: string;
     messages: EventMessage[];
     typingUsers: TypingUser[];
@@ -30,6 +30,7 @@ interface ChatSectionProps {
     canSendMessage: boolean;
     isLoadingMessages: boolean;
     hasMoreMessages: boolean;
+    isSignedIn?: boolean;
 }
 
 /**
@@ -203,78 +204,46 @@ const MessageInput = React.memo(function MessageInput({
 
     const handleSend = () => {
         if (value.trim() && !disabled) {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
             onSend();
-            // Clear typing timeout when sending
-            if (typingTimeoutRef.current) {
-                clearTimeout(typingTimeoutRef.current);
-            }
-            onStopTyping();
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
     };
 
     return (
-        <View style={[
-            styles.inputContainer,
-            {
-                backgroundColor: cardBackgroundColor,
-                shadowColor: '#000',
-                shadowOffset: { width: 0, height: -2 },
-                shadowOpacity: 0.1,
-                shadowRadius: 8,
-                elevation: 5,
-            }
-        ]}>
+        <View style={styles.inputContainer}>
             <View style={[
                 styles.textInputContainer,
                 {
                     backgroundColor: cardBackgroundColor,
                     borderColor: '#E5E5EA',
-                    shadowColor: '#000',
-                    shadowOffset: { width: 0, height: 1 },
-                    shadowOpacity: 0.05,
-                    shadowRadius: 3,
-                    elevation: 1,
                 }
             ]}>
-                <TextInput
-                    style={[
-                        styles.textInput,
-                        {
-                            color: textColor,
-                            backgroundColor: cardBackgroundColor,
-                        }
-                    ]}
+                <BottomSheetTextInput
+                    style={[styles.textInput, { color: textColor }]}
                     value={value}
                     onChangeText={handleTextChange}
-                    placeholder="Message..."
-                    placeholderTextColor="#8E8E93"
+                    placeholder="Type a message..."
+                    placeholderTextColor={textColor + '80'}
                     multiline
                     maxLength={500}
                     editable={!disabled}
-                    onBlur={onStopTyping}
                 />
             </View>
-
             <TouchableOpacity
                 style={[
                     styles.sendButton,
                     {
-                        backgroundColor: value.trim() ? '#007AFF' : '#E5E5EA',
-                        shadowColor: value.trim() ? '#007AFF' : 'transparent',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: value.trim() ? 0.3 : 0,
-                        shadowRadius: 4,
-                        elevation: value.trim() ? 3 : 0,
+                        backgroundColor: value.trim() && !disabled ? '#007AFF' : '#E5E5EA',
                     }
                 ]}
                 onPress={handleSend}
                 disabled={!value.trim() || disabled}
-                activeOpacity={0.8}
             >
                 <ThemedText style={[
                     styles.sendButtonText,
-                    { color: value.trim() ? '#FFFFFF' : '#8E8E93' }
+                    {
+                        color: value.trim() && !disabled ? '#FFFFFF' : '#8E8E93',
+                    }
                 ]}>
                     Send
                 </ThemedText>
@@ -283,202 +252,262 @@ const MessageInput = React.memo(function MessageInput({
     );
 });
 
+// Static blur backdrop when the sheet is open
+const StaticBackdrop = (props: BottomSheetBackdropProps) => (
+    <BottomSheetBackdrop
+        {...props}
+        disappearsOnIndex={-1}
+        appearsOnIndex={0}
+        pressBehavior="close"
+    >
+        <BlurView tint="default" intensity={20} style={StyleSheet.absoluteFill} />
+    </BottomSheetBackdrop>
+);
+
 /**
- * ChatSection Component
+ * ChatDrawer Component
  * 
- * Main chat interface for event participants. Provides real-time messaging,
- * typing indicators, message history, and input controls. Supports
- * pagination for loading older messages and read-only mode for non-participants.
- * 
- * Features:
- * - Real-time message display with user avatars and timestamps
- * - Typing indicators with animated dots
- * - Message input with character limits and send button
- * - Pagination for loading older messages
- * - Read-only mode for non-participants
- * - Haptic feedback for message sending
- * - Keyboard-aware layout
+ * A bottom sheet modal that contains the full chat interface.
+ * Features real-time messaging, typing indicators, and smooth animations.
  * 
  * @component
- * @param {ChatSectionProps} props - Component props
- * @returns {JSX.Element} The rendered chat section
+ * @param {ChatDrawerProps} props - Component props
+ * @returns {JSX.Element} The rendered chat drawer
  */
-export const ChatSection = React.memo(function ChatSection({
-    eventId,
-    messages,
-    typingUsers,
-    onSendMessage,
-    onLoadMoreMessages,
-    canSendMessage,
-    isLoadingMessages,
-    hasMoreMessages,
-}: ChatSectionProps) {
-    const [inputText, setInputText] = useState('');
-    const [isSending, setIsSending] = useState(false);
-    const flatListRef = useRef<FlatList<EventMessage>>(null);
-    const backgroundColor = useBackgroundColor();
-    const textColor = useTextColor();
-    const { user } = useAuth();
+export const ChatDrawer = forwardRef<{ present: () => void; dismiss: () => void }, ChatDrawerProps>(
+    function ChatDrawer({
+        eventId,
+        messages,
+        typingUsers,
+        onSendMessage,
+        onLoadMoreMessages,
+        canSendMessage,
+        isLoadingMessages,
+        hasMoreMessages,
+        isSignedIn = true,
+    }, ref) {
+        const { user } = useAuth();
+        const { startTyping, stopTyping } = useSocket();
+        const backgroundColor = useBackgroundColor();
+        const textColor = useTextColor();
 
-    const { sendMessage, startTyping, stopTyping } = useSocket();
+        // Bottom sheet ref and snap points
+        const bottomSheetModalRef = useRef<BottomSheetModal>(null);
+        const snapPoints = React.useMemo(() => ['70%'], []);
 
-    // Auto-scroll to bottom when keyboard appears
-    useEffect(() => {
-        const keyboardDidShowListener = Keyboard.addListener(
-            'keyboardDidShow',
-            () => {
-                // Small delay to ensure keyboard is fully shown
+        // Input state
+        const [inputText, setInputText] = useState('');
+        const [isSending, setIsSending] = useState(false);
+
+        // Expose methods to parent component
+        useImperativeHandle(ref, () => ({
+            present: () => {
+                bottomSheetModalRef.current?.present();
+            },
+            dismiss: () => {
+                bottomSheetModalRef.current?.dismiss();
+            },
+        }), []);
+
+        const handleSend = async () => {
+            if (!inputText.trim() || isSending) return;
+
+            try {
+                setIsSending(true);
+                await onSendMessage(inputText.trim());
+                setInputText('');
+            } catch (error) {
+                console.error('Failed to send message:', error);
+            } finally {
+                setIsSending(false);
+            }
+        };
+
+        const handleTyping = () => {
+            startTyping(eventId);
+        };
+
+        const handleStopTyping = () => {
+            stopTyping(eventId);
+        };
+
+        const handleStopTypingWrapper = () => {
+            handleStopTyping();
+        };
+
+        const renderMessage = useCallback(({ item }: { item: EventMessage }) => {
+            const isOwnMessage = user && user.id ? item.userId === user.id : false;
+            return (
+                <ChatMessage
+                    message={item}
+                    isOwnMessage={isOwnMessage}
+                />
+            );
+        }, [user]);
+
+        const keyExtractor = useCallback((item: EventMessage) => item.id, []);
+        const flatListRef = useRef<any>(null);
+
+        // Auto-scroll to bottom when new messages arrive
+        useEffect(() => {
+            if (messages.length > 0) {
+                // Use setTimeout to ensure the message is rendered before scrolling
                 setTimeout(() => {
-                    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+                    if (flatListRef.current && typeof flatListRef.current.scrollToEnd === 'function') {
+                        flatListRef.current.scrollToEnd({ animated: true });
+                    }
                 }, 100);
             }
-        );
+        }, [messages.length]);
 
-        const keyboardDidHideListener = Keyboard.addListener(
-            'keyboardDidHide',
-            () => {
-                // Optional: scroll back to top when keyboard hides
-            }
-        );
+        const renderFooter = () => {
+            if (!hasMoreMessages) return null;
 
-        return () => {
-            keyboardDidShowListener?.remove();
-            keyboardDidHideListener?.remove();
-        };
-    }, []);
-
-    // Auto-scroll to bottom when new messages arrive (inverted FlatList, so offset 0 = bottom)
-    useEffect(() => {
-        if (messages.length > 0) {
-            flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-        }
-    }, [messages.length]);
-
-    const handleSend = async () => {
-        if (!inputText.trim() || isSending) return;
-
-        const content = inputText.trim();
-        setInputText('');
-        setIsSending(true);
-
-        // Add haptic feedback for message sending
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-        try {
-            // Send via Socket.IO for real-time
-            sendMessage(eventId, content);
-
-            // Also call the callback for API fallback
-            await onSendMessage(content);
-        } catch (error) {
-            console.error('Failed to send message:', error);
-            // Optionally show error message to user
-        } finally {
-            setIsSending(false);
-        }
-    };
-
-    const handleTyping = () => {
-        startTyping(eventId);
-    };
-
-    const handleStopTyping = () => {
-        stopTyping(eventId);
-    };
-
-    // Wrapper function for MessageInput that doesn't require arguments
-    const handleStopTypingWrapper = () => {
-        handleStopTyping();
-    };
-
-    const renderMessage = useCallback(({ item }: { item: EventMessage }) => {
-        const currentUserId = user?.id;
-        const isOwnMessage = item.userId === currentUserId;
-
-        return (
-            <ChatMessage
-                message={item}
-                isOwnMessage={isOwnMessage}
-            />
-        );
-    }, [user?.id]);
-
-    const keyExtractor = useCallback((item: EventMessage) => item.id, []);
-
-    const renderFooter = () => {
-        if (!hasMoreMessages) return null;
-
-        return (
-            <View style={styles.loadingFooter}>
-                <ActivityIndicator size="small" color={textColor} />
-                <ThemedText style={styles.loadingText}>Loading more messages...</ThemedText>
-            </View>
-        );
-    };
-
-    const handleEndReached = () => {
-        if (hasMoreMessages && !isLoadingMessages) {
-            onLoadMoreMessages();
-        }
-    };
-
-    return (
-        <KeyboardAvoidingView
-            style={[styles.container, { backgroundColor }]}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        >
-            <View style={styles.messagesContainer}>
-                <FlatList
-                    ref={flatListRef}
-                    data={messages}
-                    renderItem={renderMessage}
-                    keyExtractor={keyExtractor}
-                    inverted
-                    showsVerticalScrollIndicator={false}
-                    onEndReached={handleEndReached}
-                    onEndReachedThreshold={0.1}
-                    ListFooterComponent={renderFooter}
-                    contentContainerStyle={styles.messagesList}
-                    nestedScrollEnabled={true}
-                />
-
-                <TypingIndicator users={typingUsers} />
-            </View>
-
-            {canSendMessage ? (
-                <MessageInput
-                    value={inputText}
-                    onChangeText={setInputText}
-                    onSend={handleSend}
-                    onTyping={handleTyping}
-                    onStopTyping={handleStopTypingWrapper}
-                    disabled={isSending}
-                />
-            ) : (
-                <View style={styles.readOnlyContainer}>
-                    <ThemedText style={[styles.readOnlyText, { color: textColor }]}>
-                        Join the event to participate in chat
-                    </ThemedText>
+            return (
+                <View style={styles.loadingFooter}>
+                    <ActivityIndicator size="small" color={textColor} />
+                    <ThemedText style={styles.loadingText}>Loading more messages...</ThemedText>
                 </View>
-            )}
-        </KeyboardAvoidingView>
-    );
-});
+            );
+        };
+
+        return (
+            <BottomSheetModal
+                ref={bottomSheetModalRef}
+                index={0}
+                snapPoints={snapPoints}
+                backgroundStyle={[styles.bottomSheetBackground, { backgroundColor }]}
+                handleIndicatorStyle={[styles.handleIndicator, { backgroundColor: textColor + '40' }]}
+                enablePanDownToClose={true}
+                enableDismissOnClose={true}
+                enableContentPanningGesture={false}
+                enableHandlePanningGesture={true}
+                backdropComponent={StaticBackdrop}
+            >
+                <KeyboardAvoidingView
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+                >
+                    <BottomSheetView style={[styles.container, { backgroundColor }]}>
+                        {/* Header */}
+                        <View style={styles.header}>
+                            <ThemedText style={[styles.headerTitle, { color: textColor }]}>
+                                Event Chat
+                            </ThemedText>
+                            <TouchableOpacity
+                                style={styles.closeButton}
+                                onPress={() => bottomSheetModalRef.current?.dismiss()}
+                            >
+                                <ThemedText style={[styles.closeButtonText, { color: textColor }]}>
+                                    ✕
+                                </ThemedText>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Messages Container (max 50% screen height) */}
+                        <View style={[
+                            styles.messagesContainer,
+                            { backgroundColor, maxHeight: Dimensions.get('window').height * 0.5 }
+                        ]}>
+                            <BottomSheetFlatList
+                                ref={flatListRef}
+                                data={messages}
+                                renderItem={renderMessage}
+                                keyExtractor={keyExtractor}
+                                showsVerticalScrollIndicator={false}
+                                // @ts-ignore – onScroll is omitted from type definitions but still works
+                                onScroll={({ nativeEvent }) => {
+                                    const { contentOffset } = nativeEvent;
+                                    if (contentOffset.y <= 10 && hasMoreMessages && !isLoadingMessages) {
+                                        onLoadMoreMessages();
+                                    }
+                                }}
+                                // @ts-ignore – property omitted in types
+                                scrollEventThrottle={16}
+                                ListHeaderComponent={renderFooter}
+                                contentContainerStyle={styles.messagesList}
+                                removeClippedSubviews={false}
+                                maxToRenderPerBatch={10}
+                                windowSize={10}
+                                initialNumToRender={10}
+                                style={{ flex: 1 }}
+                            />
+
+                            {/* Typing indicator fixed inside scroll */}
+                            <TypingIndicator users={typingUsers} />
+                        </View>
+
+                        {/* Input Container */}
+                        <View style={[styles.inputWrapper, { backgroundColor }]}>
+                            {canSendMessage && isSignedIn ? (
+                                <MessageInput
+                                    value={inputText}
+                                    onChangeText={setInputText}
+                                    onSend={handleSend}
+                                    onTyping={handleTyping}
+                                    onStopTyping={handleStopTypingWrapper}
+                                    disabled={isSending}
+                                />
+                            ) : isSignedIn ? (
+                                <View style={styles.readOnlyContainer}>
+                                    <ThemedText style={[styles.readOnlyText, { color: textColor }]}>
+                                        Join the event to participate in chat
+                                    </ThemedText>
+                                </View>
+                            ) : null}
+                        </View>
+                    </BottomSheetView>
+                </KeyboardAvoidingView>
+            </BottomSheetModal>
+        );
+    }
+);
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        position: 'relative',
+    },
+    bottomSheetBackground: {
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+    },
+    handleIndicator: {
+        width: 40,
+        height: 4,
+        borderRadius: 2,
+    },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        borderBottomWidth: 0.5,
+        borderBottomColor: '#E5E5EA',
+    },
+    headerTitle: {
+        fontSize: 18,
+        fontWeight: '600',
+    },
+    closeButton: {
+        padding: 8,
+    },
+    closeButtonText: {
+        fontSize: 18,
+        fontWeight: '500',
     },
     messagesContainer: {
         flex: 1,
+        paddingBottom: 80, // Keep space for absolute input bar
     },
     messagesList: {
         paddingHorizontal: 20,
-        paddingVertical: 12,
+        paddingVertical: 8,
     },
     messageContainer: {
-        marginVertical: 6,
+        marginVertical: 3,
         maxWidth: '75%',
     },
     ownMessageContainer: {
@@ -552,6 +581,16 @@ const styles = StyleSheet.create({
         opacity: 0.6,
         fontWeight: '400',
     },
+    inputWrapper: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        borderTopWidth: 0.5,
+        borderTopColor: '#E5E5EA',
+        justifyContent: 'center',
+        height: 80,
+    },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'flex-end',
@@ -566,7 +605,6 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: '#E5E5EA',
         marginRight: 12,
     },
     textInput: {
@@ -593,8 +631,6 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingVertical: 24,
         alignItems: 'center',
-        borderTopWidth: 0.5,
-        borderTopColor: '#E5E5EA',
     },
     readOnlyText: {
         fontSize: 15,

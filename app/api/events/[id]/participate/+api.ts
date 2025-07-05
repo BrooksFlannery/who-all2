@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { updateEventParticipation } from "@/lib/db/event-participation";
+import { getEventParticipants, updateEventParticipation } from "@/lib/db/event-participation";
 import { eventParticipationRequestSchema } from "@/lib/schemas";
 import { broadcastParticipationUpdate } from "@/lib/socket-broadcast";
 import { validateData } from "@/lib/validation";
@@ -73,10 +73,15 @@ export async function POST(req: Request) {
             );
         }
 
-        // Step 5: Return success response with updated counts
+        // Step 5: Get updated participant lists
+        const participants = await getEventParticipants(eventId);
+
+        // Step 6: Return success response with updated counts and participants
         return Response.json({
             success: result.success,
-            newCounts: result.newCounts
+            newCounts: result.newCounts,
+            attendees: participants.attending,
+            interested: participants.interested
         });
     } catch (error) {
         console.error('Error updating event participation:', error);

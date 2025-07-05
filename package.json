@@ -66,13 +66,16 @@
     "validate:env": "npx tsx scripts/validate-env.ts",
     "test:embeddings": "npx tsx scripts/test-embeddings.ts",
     "test:embedding-quality": "npx tsx scripts/test-embedding-quality.ts",
-    "test:event-generation": "npx tsx scripts/test-event-generation.ts"
+    "test:event-generation": "npx tsx scripts/test-event-generation.ts",
+    "check:event-photos": "npx tsx scripts/check-event-photos.ts",
+    "test:photo-generation": "npx tsx scripts/test-photo-generation.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^1.3.22",
     "@better-auth/expo": "^1.2.12",
     "@expo/ngrok": "^4.1.3",
     "@expo/vector-icons": "^14.1.0",
+    "@gorhom/bottom-sheet": "^5.1.6",
     "@neondatabase/serverless": "^1.0.1",
     "@react-navigation/bottom-tabs": "^7.3.10",
     "@react-navigation/elements": "^2.3.8",

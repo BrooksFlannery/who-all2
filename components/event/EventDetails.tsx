@@ -2,7 +2,7 @@ import { ThemedText } from '@/components/ThemedText';
 import { useBackgroundColor, useSecondaryTextColor, useTextColor } from '@/hooks/useThemeColor';
 import { Event } from '@/lib/db/types';
 import React from 'react';
-import { Linking, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { ImageBackground, Linking, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 interface EventDetailsProps {
     event: Event;
@@ -62,14 +62,22 @@ export function EventDetails({ event }: EventDetailsProps) {
         }
     };
 
-    const renderPriceLevel = (priceLevel?: number) => {
-        if (!priceLevel) return null;
-        return '💰'.repeat(priceLevel);
-    };
-
     const renderRating = (rating?: number) => {
         if (!rating) return null;
-        return `⭐ ${rating.toFixed(1)}`;
+        return (
+            <ThemedText style={[styles.venueMetaText, { color: secondaryTextColor }]}>
+                ⭐ {rating.toFixed(1)}
+            </ThemedText>
+        );
+    };
+
+    const renderPriceLevel = (priceLevel?: number) => {
+        if (!priceLevel) return null;
+        return (
+            <ThemedText style={[styles.venueMetaText, { color: secondaryTextColor }]}>
+                {'💰'.repeat(priceLevel)}
+            </ThemedText>
+        );
     };
 
     return (
@@ -110,15 +118,24 @@ export function EventDetails({ event }: EventDetailsProps) {
 
             {/* Description */}
             <View style={styles.descriptionContainer}>
-                <ScrollView
-                    style={styles.descriptionScroll}
-                    showsVerticalScrollIndicator={false}
-                    nestedScrollEnabled={true}
-                >
+                {event.secondaryPhotoUrl ? (
+                    <ImageBackground
+                        source={{ uri: event.secondaryPhotoUrl }}
+                        style={styles.descriptionBackground}
+                        imageStyle={styles.backgroundImage}
+                        onError={(error) => console.log('Image loading error:', error)}
+                    >
+                        <View style={styles.descriptionOverlay}>
+                            <ThemedText style={[styles.descriptionText, { color: '#FFFFFF' }]}>
+                                {event.description}
+                            </ThemedText>
+                        </View>
+                    </ImageBackground>
+                ) : (
                     <ThemedText style={[styles.descriptionText, { color: secondaryTextColor }]}>
                         {event.description}
                     </ThemedText>
-                </ScrollView>
+                )}
             </View>
         </View>
     );
@@ -126,7 +143,8 @@ export function EventDetails({ event }: EventDetailsProps) {
 
 const styles = StyleSheet.create({
     container: {
-        padding: 20,
+        paddingHorizontal: 20,
+        paddingTop: 20,
     },
     venueTimeRow: {
         flexDirection: 'row',
@@ -154,6 +172,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 8,
     },
+    venueMetaText: {
+        fontSize: 14,
+        fontWeight: '500',
+    },
     timeContainer: {
         alignItems: 'flex-end',
     },
@@ -178,8 +200,19 @@ const styles = StyleSheet.create({
     descriptionContainer: {
         marginBottom: 24,
     },
-    descriptionScroll: {
-        maxHeight: 200,
+    descriptionBackground: {
+        borderRadius: 12,
+        overflow: 'hidden',
+        minHeight: 120,
+    },
+    backgroundImage: {
+        borderRadius: 12,
+    },
+    descriptionOverlay: {
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        padding: 20,
+        minHeight: 120,
+        justifyContent: 'center',
     },
     descriptionText: {
         fontSize: 18,
