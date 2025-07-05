@@ -19,11 +19,59 @@ import { validateData } from "@/lib/validation";
 export async function GET(req: Request) {
     // Step 1: Authenticate the user
     // This ensures only logged-in users can access event data
-    const session = await auth.api.getSession({ headers: req.headers });
+    console.log("=== Events API Debug ===");
+    console.log("Request URL:", req.url);
+    console.log("Request method:", req.method);
+    console.log("Request headers:", Object.fromEntries(req.headers.entries()));
 
-    if (!session?.user?.id) {
+    // Log specific headers we care about
+    const authHeader = req.headers.get('authorization');
+    const cookieHeader = req.headers.get('cookie');
+    console.log("Authorization header:", authHeader);
+    console.log("Cookie header:", cookieHeader);
+
+    // Try different session validation methods
+    let session = await auth.api.getSession({ headers: req.headers });
+    console.log("Session from auth.api.getSession:", session);
+
+    // If that fails, try using the auth handler directly
+    if (!session) {
+        console.log("Trying auth.handler for session validation");
+        try {
+            // Create a new request to the auth endpoint to validate the session
+            const authUrl = new URL(req.url);
+            authUrl.pathname = '/api/auth/session';
+            const authReq = new Request(authUrl.toString(), {
+                headers: req.headers,
+                method: 'GET'
+            });
+
+            const authResponse = await auth.handler(authReq);
+            console.log("Auth handler status:", authResponse.status);
+
+            if (authResponse.status === 200) {
+                const authData = await authResponse.json();
+                console.log("Auth handler response:", authData);
+                if (authData.session) {
+                    session = authData;
+                }
+            }
+        } catch (error) {
+            console.error("Auth handler error:", error);
+        }
+    }
+
+    if (!session) {
+        console.log("No session found, returning 401");
         return new Response("Unauthorized", { status: 401 });
     }
+
+    if (!session.user?.id) {
+        console.log("No user ID in session, returning 401");
+        return new Response("Unauthorized", { status: 401 });
+    }
+
+    console.log("User authenticated:", session.user.id);
 
     // Step 2: Initialize and verify database availability
     const db = initializeDatabase();
