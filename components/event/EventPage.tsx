@@ -14,7 +14,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, RefreshControl, StyleSheet, View } from 'react-native';
 import Animated, {
     useAnimatedRef,
-    useScrollViewOffset,
+    useAnimatedScrollHandler,
+    useSharedValue,
 } from 'react-native-reanimated';
 
 /**
@@ -78,7 +79,11 @@ export const EventPage = React.memo(function EventPage() {
 
     // Scroll view ref and offset for parallax effect
     const scrollRef = useAnimatedRef<Animated.ScrollView>();
-    const scrollOffset = useScrollViewOffset(scrollRef);
+    const scrollY = useSharedValue(0);
+
+    const onScroll = useAnimatedScrollHandler(({ contentOffset }) => {
+        scrollY.value = contentOffset.y;
+    });
 
     // Memoize participants object to prevent unnecessary re-renders
     const participants = useMemo(() => ({
@@ -403,10 +408,10 @@ export const EventPage = React.memo(function EventPage() {
     if (loadingState.isLoading) {
         return (
             <View style={[styles.container, { backgroundColor }]}>
-                <View style={styles.header}>
-                    <Skeleton width={80} height={24} style={{ marginBottom: 16 }} />
-                </View>
-                <View style={{ paddingHorizontal: 0 }}>
+                <ThemedText style={styles.backButton} onPress={handleBackPress}>
+                    ← Back
+                </ThemedText>
+                <View style={{ paddingHorizontal: 0, paddingTop: 100 }}>
                     {/* Event Header Skeleton */}
                     <Skeleton width={'100%'} height={220} borderRadius={16} style={{ marginBottom: 24 }} />
                     {/* Event Title Skeleton */}
@@ -436,11 +441,9 @@ export const EventPage = React.memo(function EventPage() {
     if (error) {
         return (
             <View style={[styles.container, { backgroundColor }]}>
-                <View style={styles.header}>
-                    <ThemedText style={styles.backButton} onPress={handleBackPress}>
-                        ← Back
-                    </ThemedText>
-                </View>
+                <ThemedText style={styles.backButton} onPress={handleBackPress}>
+                    ← Back
+                </ThemedText>
                 <View style={styles.errorContainer}>
                     <ThemedText style={styles.errorTitle}>Error</ThemedText>
                     <ThemedText style={styles.errorMessage}>{error}</ThemedText>
@@ -458,11 +461,9 @@ export const EventPage = React.memo(function EventPage() {
     if (!event) {
         return (
             <View style={[styles.container, { backgroundColor }]}>
-                <View style={styles.header}>
-                    <ThemedText style={styles.backButton} onPress={handleBackPress}>
-                        ← Back
-                    </ThemedText>
-                </View>
+                <ThemedText style={styles.backButton} onPress={handleBackPress}>
+                    ← Back
+                </ThemedText>
                 <View style={styles.errorContainer}>
                     <ThemedText style={styles.errorTitle}>Event Not Found</ThemedText>
                     <ThemedText style={styles.errorMessage}>
@@ -475,12 +476,10 @@ export const EventPage = React.memo(function EventPage() {
 
     return (
         <View style={[styles.container, { backgroundColor }]}>
-            {/* Header with Back Button */}
-            <View style={styles.header}>
-                <ThemedText style={styles.backButton} onPress={handleBackPress}>
-                    ← Back
-                </ThemedText>
-            </View>
+            {/* Back Button - Absolute positioned */}
+            <ThemedText style={styles.backButton} onPress={handleBackPress}>
+                ← Back
+            </ThemedText>
 
             {/* Scrollable Content with Parallax Effect */}
             <Animated.ScrollView
@@ -488,6 +487,7 @@ export const EventPage = React.memo(function EventPage() {
                 style={styles.scrollView}
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
+                onScroll={onScroll}
                 refreshControl={
                     <RefreshControl
                         refreshing={loadingState.isLoading}
@@ -496,7 +496,7 @@ export const EventPage = React.memo(function EventPage() {
                 }
             >
                 {/* Event Header with Photo */}
-                <EventHeader event={event} scrollOffset={scrollOffset} />
+                <EventHeader event={event} scrollOffset={scrollY} />
 
                 {/* Event Details */}
                 <EventDetails event={event} />
@@ -544,19 +544,23 @@ const styles = StyleSheet.create({
     scrollView: {
         flex: 1,
     },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingTop: 60,
-        paddingBottom: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E5E5EA',
-    },
     backButton: {
-        fontSize: 16,
+        position: 'absolute',
+        top: 16,
+        left: 16,
+        zIndex: 10,
+        fontSize: 18,
         color: '#007AFF',
-        fontWeight: '500',
+        fontWeight: '600',
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        backgroundColor: 'rgba(255, 255, 255, 0.9)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+        elevation: 3,
     },
     loadingContainer: {
         flex: 1,
