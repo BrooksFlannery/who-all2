@@ -11,15 +11,17 @@ import { validateData } from "@/lib/validation";
  * or to leave an event by setting status to null.
  * 
  * @param req - HTTP request with body containing participation status
- * @param params - Route parameters containing the event ID
  * @returns JSON response with success status and updated counts
  */
-export async function POST(
-    req: Request,
-    { params }: { params: { id: string } }
-) {
+export async function POST(req: Request) {
     console.log("=== Event Participation API Debug ===");
-    console.log("Event ID:", params.id);
+
+    // Extract event ID from URL
+    const url = new URL(req.url);
+    const pathParts = url.pathname.split('/');
+    const eventId = pathParts[pathParts.length - 2]; // -2 because the last part is "participate"
+
+    console.log("Event ID:", eventId);
 
     // Step 1: Authenticate the user
     const session = await auth.api.getSession({ headers: req.headers });
@@ -52,7 +54,7 @@ export async function POST(
     // Step 3: Update event participation
     try {
         const result = await updateEventParticipation(
-            params.id,
+            eventId,
             session.user.id,
             status
         );
@@ -60,7 +62,7 @@ export async function POST(
         // Step 4: Broadcast participation update via Socket.IO
         if (result.success) {
             await broadcastParticipationUpdate(
-                params.id,
+                eventId,
                 session.user.id,
                 status,
                 {

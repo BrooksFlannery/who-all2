@@ -11,7 +11,7 @@ if (!GOOGLE_PLACES_API_KEY) {
 }
 
 async function testEmbeddingDescriptions() {
-    console.log('🧪 Testing embedding description generation and database saving...');
+
 
     // Create a single sample pseudo-event for testing
     const samplePseudoEvent: PseudoEvent = {
@@ -31,7 +31,7 @@ async function testEmbeddingDescriptions() {
     };
 
     try {
-        console.log('🔍 Step 1: Generating real event with embedding description...');
+
         const event = await generateRealEvent(samplePseudoEvent, GOOGLE_PLACES_API_KEY!);
 
         if (!event) {
@@ -39,41 +39,29 @@ async function testEmbeddingDescriptions() {
             return;
         }
 
-        console.log('✅ Event generated successfully!');
-        console.log(`📅 Title: ${event.title}`);
-        console.log(`📝 Description: ${event.description}`);
-        console.log(`🧠 Embedding Description: ${event.embeddingDescription || 'NOT GENERATED'}`);
-        console.log(`🏷️  Categories: ${event.categories.join(', ')}`);
-        console.log(`📍 Location: ${event.location.lat}, ${event.location.lng}`);
-        if (event.venue) {
-            console.log(`🏢 Venue: ${event.venue.name}`);
-        }
 
-        console.log('\n🔍 Step 2: Saving event to database...');
+
+
         const eventId = await insertEvent(event);
-        console.log(`✅ Event saved to database with ID: ${eventId}`);
 
-        console.log('\n🔍 Step 3: Verifying event in database...');
+
+
         const { getEventById } = await import('../lib/db/events');
         const savedEvent = await getEventById(eventId);
 
         if (savedEvent) {
-            console.log('✅ Event retrieved from database successfully!');
-            console.log(`📅 Title: ${savedEvent.title}`);
-            console.log(`📝 Description: ${savedEvent.description}`);
-            console.log(`🧠 Embedding Description: ${savedEvent.embeddingDescription || 'NOT SAVED'}`);
-            console.log(`🏷️  Categories: ${savedEvent.categories.join(', ')}`);
+            // Event retrieved from database successfully
 
             if (savedEvent.embeddingDescription) {
-                console.log('\n🎉 SUCCESS: Embedding description was generated and saved!');
+                // SUCCESS: Embedding description was generated and saved
             } else {
-                console.log('\n❌ FAILURE: Embedding description was not saved to database');
+                // FAILURE: Embedding description was not saved to database
             }
         } else {
-            console.log('❌ Failed to retrieve event from database');
+            // Failed to retrieve event from database
         }
 
-        console.log('\n🎉 Embedding description test completed!');
+
 
     } catch (error: any) {
         console.error('❌ Test failed:', error.message);

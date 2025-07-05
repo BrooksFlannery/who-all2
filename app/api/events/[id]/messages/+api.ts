@@ -12,15 +12,17 @@ import { validateData } from "@/lib/validation";
  * to load messages in chunks for better performance.
  * 
  * @param req - HTTP request with query parameters for pagination
- * @param params - Route parameters containing the event ID
  * @returns JSON response containing messages and pagination info
  */
-export async function GET(
-    req: Request,
-    { params }: { params: { id: string } }
-) {
+export async function GET(req: Request) {
     console.log("=== Event Messages GET API Debug ===");
-    console.log("Event ID:", params.id);
+
+    // Extract event ID from URL
+    const url = new URL(req.url);
+    const pathParts = url.pathname.split('/');
+    const eventId = pathParts[pathParts.length - 2]; // -2 because the last part is "messages"
+
+    console.log("Event ID:", eventId);
 
     // Step 1: Authenticate the user
     const session = await auth.api.getSession({ headers: req.headers });
@@ -33,7 +35,6 @@ export async function GET(
     console.log("User authenticated:", session.user.id);
 
     // Step 2: Parse query parameters
-    const url = new URL(req.url);
     const limit = parseInt(url.searchParams.get('limit') || '20');
     const beforeParam = url.searchParams.get('before');
     const before = beforeParam ? new Date(beforeParam) : undefined;
@@ -42,7 +43,7 @@ export async function GET(
 
     // Step 3: Get messages with pagination
     try {
-        const result = await getEventMessages(params.id, limit, before);
+        const result = await getEventMessages(eventId, limit, before);
 
         // Step 4: Transform messages for response
         const transformedMessages = result.messages.map(msg => ({
@@ -81,15 +82,17 @@ export async function GET(
  * Only users who are attending or interested in the event can send messages.
  * 
  * @param req - HTTP request with body containing message content
- * @param params - Route parameters containing the event ID
  * @returns JSON response containing the saved message
  */
-export async function POST(
-    req: Request,
-    { params }: { params: { id: string } }
-) {
+export async function POST(req: Request) {
     console.log("=== Event Messages POST API Debug ===");
-    console.log("Event ID:", params.id);
+
+    // Extract event ID from URL
+    const url = new URL(req.url);
+    const pathParts = url.pathname.split('/');
+    const eventId = pathParts[pathParts.length - 2]; // -2 because the last part is "messages"
+
+    console.log("Event ID:", eventId);
 
     // Step 1: Authenticate the user
     const session = await auth.api.getSession({ headers: req.headers });
@@ -102,7 +105,7 @@ export async function POST(
     console.log("User authenticated:", session.user.id);
 
     // Step 2: Check if user is participating in the event
-    const userParticipation = await getUserParticipationStatus(params.id, session.user.id);
+    const userParticipation = await getUserParticipationStatus(eventId, session.user.id);
     if (!userParticipation) {
         console.log("User not participating in event, returning 403");
         return new Response("Must join event to send messages", { status: 403 });
@@ -129,7 +132,7 @@ export async function POST(
     // Step 4: Save the message
     try {
         const message = await saveEventMessage(
-            params.id,
+            eventId,
             session.user.id,
             content,
             session.user.name || 'Anonymous',

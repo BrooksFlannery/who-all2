@@ -58,7 +58,7 @@ const validations: EnvValidation[] = [
     }
 ];
 
-console.log('🔍 Validating Socket.IO Server Environment Variables\n');
+
 
 let allValid = true;
 
@@ -67,10 +67,7 @@ validations.forEach(validation => {
     const required = validation.required ? '(REQUIRED)' : '(OPTIONAL)';
     const value = validation.value || 'NOT SET';
 
-    console.log(`${status} ${validation.name} ${required}`);
-    console.log(`   Value: ${value}`);
-    console.log(`   Description: ${validation.message}`);
-    console.log('');
+
 
     if (!validation.valid) {
         allValid = false;
@@ -78,10 +75,7 @@ validations.forEach(validation => {
 });
 
 if (allValid) {
-    console.log('🎉 All environment variables are valid!');
     process.exit(0);
 } else {
-    console.log('⚠️  Some environment variables are missing or invalid.');
-    console.log('Please check your .env file and ensure all required variables are set.');
     process.exit(1);
 } 

@@ -82,7 +82,6 @@ class SocketClient {
         // Listen for disconnection to trigger reconnection
         if (this.socket) {
             this.socket.on('disconnect', (reason) => {
-                console.log('Socket disconnected:', reason);
                 this.notifyConnectionChange(false);
 
                 if (reason === 'io server disconnect') {
@@ -108,7 +107,7 @@ class SocketClient {
             }
 
             this.isConnecting = true;
-            console.log('=== Socket Connection Attempt ===');
+
 
             try {
                 // Get authentication headers
@@ -120,16 +119,11 @@ class SocketClient {
                 // Store token for reconnection
                 this.authToken = token || 'authenticated';
 
-                console.log('🔥 SOCKET DEBUG:');
-                console.log('  Auth headers:', Object.keys(authHeaders));
-                console.log('  Token available:', !!token);
+
 
                 // Get socket URL from environment or fallback
                 const socketUrl = process.env.EXPO_PUBLIC_SOCKET_URL || 'http://localhost:3001';
-                console.log('🔥 SOCKET DEBUG:');
-                console.log('  URL:', socketUrl);
-                console.log('  Env var:', process.env.EXPO_PUBLIC_SOCKET_URL || 'NOT SET');
-                console.log('  Platform:', typeof window !== 'undefined' ? 'web' : 'native');
+
 
                 // Create socket connection with authentication
                 this.socket = io(socketUrl, {
@@ -141,7 +135,6 @@ class SocketClient {
                 });
 
                 this.socket.on('connect', () => {
-                    console.log('🔥 SOCKET CONNECTED!');
                     this.isConnecting = false;
                     this.reconnectAttempts = 0;
                     this.reconnectDelay = 1000;
@@ -166,7 +159,6 @@ class SocketClient {
                 });
 
                 this.socket.on('disconnect', (reason) => {
-                    console.log('Socket disconnected:', reason);
                     this.notifyConnectionChange(false);
                 });
 
@@ -185,29 +177,24 @@ class SocketClient {
 
         // Message events
         this.socket.on('new-message', (message: EventMessage) => {
-            console.log('Received new message:', message);
             this.messageListeners.forEach(listener => listener(message));
         });
 
         // Typing events
         this.socket.on('user-typing', (user: TypingUser) => {
-            console.log('User typing:', user);
             this.typingListeners.forEach(listener => listener(user));
         });
 
         this.socket.on('user-stopped-typing', (userId: string) => {
-            console.log('User stopped typing:', userId);
             this.stopTypingListeners.forEach(listener => listener(userId));
         });
 
         // Participation events
         this.socket.on('user-joined', (data: UserParticipationUpdate) => {
-            console.log('User joined:', data);
             this.userJoinedListeners.forEach(listener => listener(data));
         });
 
         this.socket.on('user-left', (data: { userId: string; status: string }) => {
-            console.log('User left:', data);
             this.userLeftListeners.forEach(listener => listener(data));
         });
     }
@@ -230,7 +217,7 @@ class SocketClient {
             return;
         }
 
-        console.log('Joining event room:', eventId);
+
         this.socket.emit('join-event', { eventId });
         this.currentEventId = eventId;
     }
@@ -241,7 +228,7 @@ class SocketClient {
             return;
         }
 
-        console.log('Leaving event room:', eventId);
+
         this.socket.emit('leave-event', { eventId });
 
         if (this.currentEventId === eventId) {
@@ -255,7 +242,7 @@ class SocketClient {
             return;
         }
 
-        console.log('Sending message to event:', eventId);
+
         this.socket.emit('send-message', { eventId, content });
     }
 

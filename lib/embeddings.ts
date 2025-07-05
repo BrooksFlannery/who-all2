@@ -66,8 +66,7 @@ export async function updateUserInterestEmbedding(userId: string, conversationCo
             })
             .where(eq(user.id, userId));
 
-        console.log(`Updated interest embedding for user ${userId}`);
-        console.log(`📊 Weighted interests: ${weightedInterests}`);
+
     } catch (error) {
         console.error('Error updating user interest embedding:', error);
         // Don't throw - fail gracefully as specified
@@ -101,8 +100,7 @@ export async function updateEventEmbedding(eventId: string, title: string, descr
             })
             .where(eq(event.id, eventId));
 
-        console.log(`Updated embedding for event ${eventId}`);
-        console.log(`📝 Embedding description: ${embeddingDescription}`);
+
     } catch (error) {
         console.error('Error updating event embedding:', error);
         // Don't throw - fail gracefully as specified
@@ -135,7 +133,7 @@ export async function getEventRecommendations(userId: string): Promise<Array<{
             .limit(1);
 
         if (!userResult[0]?.interestEmbedding) {
-            console.log(`No interest embedding found for user ${userId}`);
+
             return [];
         }
 
@@ -178,16 +176,13 @@ export async function getEventRecommendations(userId: string): Promise<Array<{
         await updateUserRecommendedEvents(userId, topRecommendations.map(r => r.id));
 
         // Console log results as specified
-        console.log('🎯 Event Recommendations:');
-        console.log(`📊 Found ${recommendations.length} events with embeddings`);
-        console.log(`👤 Comparing against user ${userId}`);
+
         if (userWeightedInterests) {
-            console.log(`📋 User weighted interests: ${userWeightedInterests.substring(0, 100)}...`);
+
         }
-        console.log(`📝 Caching top ${topRecommendations.length} recommendations`);
+
         topRecommendations.forEach((rec, index) => {
-            console.log(`#${index + 1} ${rec.title}: ${rec.similarity.toFixed(4)}`);
-            console.log(`  📝 ${rec.description}`);
+
         });
 
         return topRecommendations;
@@ -212,7 +207,7 @@ async function updateUserRecommendedEvents(userId: string, eventIds: string[]): 
             })
             .where(eq(user.id, userId));
 
-        console.log(`Updated cached recommendations for user ${userId}: ${eventIds.length} events`);
+
     } catch (error) {
         console.error('Error updating user recommended events:', error);
         // Don't throw - fail gracefully
@@ -238,7 +233,7 @@ export async function generateAllEventEmbeddings(): Promise<void> {
         })
             .from(event);
 
-        console.log(`Generating embeddings for ${events.length} events...`);
+
 
         for (const eventData of events) {
             await updateEventEmbedding(
@@ -249,7 +244,7 @@ export async function generateAllEventEmbeddings(): Promise<void> {
             );
         }
 
-        console.log('Finished generating all event embeddings');
+
     } catch (error) {
         console.error('Error generating all event embeddings:', error);
     }

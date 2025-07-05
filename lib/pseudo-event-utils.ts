@@ -45,27 +45,27 @@ export function findCentroidUsers(
     clusterCentroid: number[],
     count: number = EVENT_CONFIG.CENTROID_USERS_COUNT
 ): string[] {
-    console.log(`🔍 Finding centroid users: ${clusterUserIds.length} user IDs, ${users.length} user objects`);
+
 
     const userScores: CentroidUser[] = clusterUserIds.map(userId => {
         const user = users.find(u => u.id === userId);
         if (!user || !user.interestEmbedding) {
-            console.log(`⚠️ User ${userId} not found or missing embedding`);
+
             return { userId, similarity: -1 };
         }
 
         const userEmbedding = JSON.parse(user.interestEmbedding);
         const similarity = calculateCosineSimilarity(userEmbedding, clusterCentroid);
-        console.log(`📊 User ${userId} similarity: ${similarity.toFixed(4)}`);
+
         return { userId, similarity };
     });
 
     const validUsers = userScores.filter(u => u.similarity >= 0);
-    console.log(`✅ Found ${validUsers.length} valid users with embeddings`);
+
 
     // If we have 5 or fewer users, use all of them
     const targetCount = Math.min(count, validUsers.length);
-    console.log(`🎯 Selecting top ${targetCount} users (requested: ${count}, available: ${validUsers.length})`);
+
 
     // Return top N most similar users
     return validUsers
