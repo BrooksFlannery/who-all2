@@ -22,6 +22,7 @@ export type Event = {
     venueType?: string;
     venueRating?: number;
     venuePriceLevel?: number;
+    secondaryPhotoUrl?: string; // Secondary photo from Google Places
     hostId?: string;
     embedding?: string;
     createdAt: Date;

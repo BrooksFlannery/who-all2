@@ -437,6 +437,26 @@ const handleEventPress = (event: Event) => {
 - User reputation system
 - Event analytics and insights
 
+## Seed User and Photo Updates
+
+### Secondary Photo Integration
+- **Google Places API**: Fetch second photo from venue search results
+- **Storage**: Store as `secondary_photo_url` in `event` table
+- **Fallback**: Use same gradient fallback as primary photo if no secondary photo available
+- **Usage**: Display secondary photo in event details or as alternative view
+
+### Seed User ID Scheme Update
+- **Format**: Change from `user-{keyword}-{number}` to `seed-{keyword}-{number}`
+- **Consistency**: All seed users will have predictable IDs starting with "seed"
+- **Benefits**: Easier identification and bulk operations on seed users
+- **Example**: `user-music-1` becomes `seed-music-1`
+
+### Seed User Event Assignment
+- **Distribution**: 66% chance of "interested", 33% chance of "attending"
+- **Random Assignment**: Seed users randomly assigned to events after event generation
+- **Realistic Data**: Creates more realistic event participation patterns
+- **Bulk Operation**: Single script to assign all seed users to events
+
 ## Implementation Checklist
 
 ### Phase 1: Database Foundation
@@ -617,6 +637,23 @@ const handleEventPress = (event: Event) => {
 - [x] Optimize bundle size with code splitting
 - [x] Add proper TypeScript types to all components
 - [x] Final code review and cleanup
+
+### Phase 19: Secondary Photo Integration
+- [x] Update Google Places API to fetch second photo from results
+- [x] Add `secondary_photo_url` field to event database schema
+- [x] Update event generation script to store secondary photos
+- [x] Add fallback logic for when secondary photo not available
+- [x] Test secondary photo fetching with various venue types
+
+
+### Phase 20: Seed User Updates
+- [x] Update seed users script to use "seed-" prefix instead of "user-"
+- [x] Create script to randomly assign seed users to events
+- [x] Implement 66% interested / 33% attending distribution
+- [x] Test seed user assignment with large event sets
+- [x] Verify seed user IDs are consistent across all scripts
+- [x] Automatically assign seed users after event generation
+- [x] Organize package.json scripts with clear labels
 
 ## Testing Strategy
 

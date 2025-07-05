@@ -27,6 +27,7 @@ export interface VenueCandidate {
     primaryType?: string;
     primaryTypeDisplayName?: string;
     photoResourceName?: string;
+    secondaryPhotoResourceName?: string; // Second photo from Google Places
 }
 
 /**
@@ -155,6 +156,7 @@ export async function searchText(params: VenueSearchParams): Promise<VenueCandid
             primaryType: place.primaryType,
             primaryTypeDisplayName: place.primaryTypeDisplayName,
             photoResourceName: place.photos && place.photos.length > 0 ? place.photos[0].name : undefined,
+            secondaryPhotoResourceName: place.photos && place.photos.length > 1 ? place.photos[1].name : undefined,
         }));
     } catch (error: any) {
         console.error('❌ Google Places API search failed:', error.response?.data || error.message);

@@ -72,7 +72,7 @@ async function cleanupExistingSeededUsers(): Promise<number> {
         // Find all users with seeded pattern
         const seededUsers = await db.select()
             .from(user)
-            .where(like(user.id, 'user-%'));
+            .where(like(user.id, 'seed-%'));
 
         if (seededUsers.length === 0) {
             console.log('🧹 No existing seeded users found');
@@ -87,7 +87,7 @@ async function cleanupExistingSeededUsers(): Promise<number> {
 
         // Delete seeded users
         await db.delete(user)
-            .where(like(user.id, 'user-%'));
+            .where(like(user.id, 'seed-%'));
 
         console.log(`🧹 Cleaned up ${seededUsers.length} existing seeded users and their messages`);
         return seededUsers.length;
@@ -121,7 +121,7 @@ function getUsersToSeed(count: number): MockUser[] {
 const mockUsers: MockUser[] = [
     // Fitness & Wellness Cluster
     {
-        id: 'user-fitness-1',
+        id: 'seed-fitness-1',
         name: 'Sarah Chen',
         email: 'sarah.chen@example.com',
         interests: ['yoga', 'meditation', 'healthy eating', 'mindfulness'],
@@ -133,7 +133,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-fitness-2',
+        id: 'seed-fitness-2',
         name: 'Marcus Johnson',
         email: 'marcus.johnson@example.com',
         interests: ['weightlifting', 'crossfit', 'protein nutrition', 'gym culture'],
@@ -145,7 +145,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-fitness-3',
+        id: 'seed-fitness-3',
         name: 'Amanda Foster',
         email: 'amanda.foster@example.com',
         interests: ['pilates', 'barre', 'flexibility', 'posture'],
@@ -157,7 +157,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-fitness-4',
+        id: 'seed-fitness-4',
         name: 'Tyler Reynolds',
         email: 'tyler.reynolds@example.com',
         interests: ['running', 'marathons', 'endurance training', 'trail running'],
@@ -169,7 +169,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-fitness-5',
+        id: 'seed-fitness-5',
         name: 'Zoe Martinez',
         email: 'zoe.martinez@example.com',
         interests: ['cycling', 'spin classes', 'outdoor biking', 'cardio'],
@@ -183,7 +183,7 @@ const mockUsers: MockUser[] = [
 
     // Creative Arts Cluster
     {
-        id: 'user-creative-1',
+        id: 'seed-creative-1',
         name: 'Emma Rodriguez',
         email: 'emma.rodriguez@example.com',
         interests: ['painting', 'art galleries', 'creative workshops', 'design'],
@@ -195,7 +195,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-creative-2',
+        id: 'seed-creative-2',
         name: 'David Kim',
         email: 'david.kim@example.com',
         interests: ['photography', 'film', 'documentary', 'visual storytelling'],
@@ -207,7 +207,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-creative-3',
+        id: 'seed-creative-3',
         name: 'Sophie Anderson',
         email: 'sophie.anderson@example.com',
         interests: ['sculpture', 'ceramics', 'pottery', '3D art'],
@@ -219,7 +219,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-creative-4',
+        id: 'seed-creative-4',
         name: 'Lucas Chen',
         email: 'lucas.chen@example.com',
         interests: ['digital art', 'illustration', 'graphic design', 'animation'],
@@ -231,7 +231,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-creative-5',
+        id: 'seed-creative-5',
         name: 'Isabella Torres',
         email: 'isabella.torres@example.com',
         interests: ['textile art', 'weaving', 'fiber arts', 'crafts'],
@@ -245,7 +245,7 @@ const mockUsers: MockUser[] = [
 
     // Technology & Innovation Cluster
     {
-        id: 'user-tech-1',
+        id: 'seed-tech-1',
         name: 'Alex Thompson',
         email: 'alex.thompson@example.com',
         interests: ['programming', 'AI', 'startups', 'tech meetups'],
@@ -257,7 +257,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-tech-2',
+        id: 'seed-tech-2',
         name: 'Priya Patel',
         email: 'priya.patel@example.com',
         interests: ['data science', 'analytics', 'business intelligence', 'tech networking'],
@@ -269,7 +269,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-tech-3',
+        id: 'seed-tech-3',
         name: 'Ryan O\'Connor',
         email: 'ryan.oconnor@example.com',
         interests: ['blockchain', 'cryptocurrency', 'web3', 'decentralized finance'],
@@ -281,7 +281,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-tech-4',
+        id: 'seed-tech-4',
         name: 'Maya Singh',
         email: 'maya.singh@example.com',
         interests: ['cybersecurity', 'ethical hacking', 'penetration testing', 'security'],
@@ -293,7 +293,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-tech-5',
+        id: 'seed-tech-5',
         name: 'Kevin Zhang',
         email: 'kevin.zhang@example.com',
         interests: ['mobile development', 'iOS', 'Android', 'app development'],
@@ -307,7 +307,7 @@ const mockUsers: MockUser[] = [
 
     // Food & Dining Cluster
     {
-        id: 'user-food-1',
+        id: 'seed-food-1',
         name: 'Carlos Mendez',
         email: 'carlos.mendez@example.com',
         interests: ['cooking', 'restaurants', 'food culture', 'culinary arts'],
@@ -319,7 +319,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-food-2',
+        id: 'seed-food-2',
         name: 'Lisa Wang',
         email: 'lisa.wang@example.com',
         interests: ['vegan cooking', 'healthy eating', 'sustainable food', 'plant-based'],
@@ -331,7 +331,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-food-3',
+        id: 'seed-food-3',
         name: 'James Wilson',
         email: 'james.wilson@example.com',
         interests: ['baking', 'pastry', 'desserts', 'bread making'],
@@ -343,7 +343,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-food-4',
+        id: 'seed-food-4',
         name: 'Aisha Rahman',
         email: 'aisha.rahman@example.com',
         interests: ['middle eastern cuisine', 'spices', 'traditional cooking', 'halal food'],
@@ -355,7 +355,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-food-5',
+        id: 'seed-food-5',
         name: 'Miguel Santos',
         email: 'miguel.santos@example.com',
         interests: ['bbq', 'grilling', 'smoking meat', 'outdoor cooking'],
@@ -369,7 +369,7 @@ const mockUsers: MockUser[] = [
 
     // Music & Entertainment Cluster
     {
-        id: 'user-music-1',
+        id: 'seed-music-1',
         name: 'Jordan Smith',
         email: 'jordan.smith@example.com',
         interests: ['live music', 'jazz', 'concerts', 'music venues'],
@@ -381,7 +381,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-music-2',
+        id: 'seed-music-2',
         name: 'Nina Garcia',
         email: 'nina.garcia@example.com',
         interests: ['dancing', 'salsa', 'latin music', 'dance classes'],
@@ -393,7 +393,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-music-3',
+        id: 'seed-music-3',
         name: 'Brandon Lee',
         email: 'brandon.lee@example.com',
         interests: ['hip hop', 'rap', 'beat making', 'music production'],
@@ -405,7 +405,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-music-4',
+        id: 'seed-music-4',
         name: 'Elena Popov',
         email: 'elena.popov@example.com',
         interests: ['classical music', 'orchestra', 'opera', 'chamber music'],
@@ -417,7 +417,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-music-5',
+        id: 'seed-music-5',
         name: 'Diego Rodriguez',
         email: 'diego.rodriguez@example.com',
         interests: ['rock music', 'guitar', 'band performances', 'music festivals'],
@@ -431,7 +431,7 @@ const mockUsers: MockUser[] = [
 
     // Education & Learning Cluster
     {
-        id: 'user-education-1',
+        id: 'seed-education-1',
         name: 'Dr. Rachel Green',
         email: 'rachel.green@example.com',
         interests: ['academic research', 'lectures', 'book clubs', 'intellectual discussions'],
@@ -443,7 +443,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-education-2',
+        id: 'seed-education-2',
         name: 'Tommy Park',
         email: 'tommy.park@example.com',
         interests: ['language learning', 'spanish', 'conversation practice', 'cultural exchange'],
@@ -455,7 +455,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-education-3',
+        id: 'seed-education-3',
         name: 'Maria Santos',
         email: 'maria.santos@example.com',
         interests: ['workshops', 'skill building', 'professional development', 'networking'],
@@ -469,7 +469,7 @@ const mockUsers: MockUser[] = [
 
     // Outdoor & Adventure Cluster
     {
-        id: 'user-outdoor-1',
+        id: 'seed-outdoor-1',
         name: 'Jake Williams',
         email: 'jake.williams@example.com',
         interests: ['hiking', 'camping', 'rock climbing', 'outdoor adventures'],
@@ -481,7 +481,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-outdoor-2',
+        id: 'seed-outdoor-2',
         name: 'Sofia Rodriguez',
         email: 'sofia.rodriguez@example.com',
         interests: ['kayaking', 'water sports', 'beach activities', 'marine life'],
@@ -493,7 +493,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-outdoor-3',
+        id: 'seed-outdoor-3',
         name: 'Chris Thompson',
         email: 'chris.thompson@example.com',
         interests: ['skiing', 'snowboarding', 'winter sports', 'mountain activities'],
@@ -507,7 +507,7 @@ const mockUsers: MockUser[] = [
 
     // Gaming & Esports Cluster
     {
-        id: 'user-gaming-1',
+        id: 'seed-gaming-1',
         name: 'Alex Chen',
         email: 'alex.chen@example.com',
         interests: ['video games', 'esports', 'gaming tournaments', 'board games'],
@@ -519,7 +519,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-gaming-2',
+        id: 'seed-gaming-2',
         name: 'Lily Johnson',
         email: 'lily.johnson@example.com',
         interests: ['tabletop games', 'dungeons and dragons', 'roleplaying', 'strategy games'],
@@ -533,7 +533,7 @@ const mockUsers: MockUser[] = [
 
     // Fashion & Style Cluster
     {
-        id: 'user-fashion-1',
+        id: 'seed-fashion-1',
         name: 'Isabella Martinez',
         email: 'isabella.martinez@example.com',
         interests: ['fashion design', 'style consulting', 'fashion shows', 'trends'],
@@ -545,7 +545,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-fashion-2',
+        id: 'seed-fashion-2',
         name: 'Marcus Davis',
         email: 'marcus.davis@example.com',
         interests: ['streetwear', 'sneaker culture', 'urban fashion', 'style photography'],
@@ -559,7 +559,7 @@ const mockUsers: MockUser[] = [
 
     // Business & Entrepreneurship Cluster
     {
-        id: 'user-business-1',
+        id: 'seed-business-1',
         name: 'Jennifer Lee',
         email: 'jennifer.lee@example.com',
         interests: ['startup networking', 'business strategy', 'entrepreneurship', 'investing'],
@@ -571,7 +571,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-business-2',
+        id: 'seed-business-2',
         name: 'Robert Kim',
         email: 'robert.kim@example.com',
         interests: ['consulting', 'business consulting', 'strategy', 'corporate events'],
@@ -585,7 +585,7 @@ const mockUsers: MockUser[] = [
 
     // Health & Medical Cluster
     {
-        id: 'user-health-1',
+        id: 'seed-health-1',
         name: 'Dr. Sarah Wilson',
         email: 'sarah.wilson@example.com',
         interests: ['medical conferences', 'healthcare innovation', 'medical research', 'public health'],
@@ -597,7 +597,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-health-2',
+        id: 'seed-health-2',
         name: 'Michael Brown',
         email: 'michael.brown@example.com',
         interests: ['mental health', 'therapy', 'wellness coaching', 'mindfulness'],
@@ -611,7 +611,7 @@ const mockUsers: MockUser[] = [
 
     // Science & Research Cluster
     {
-        id: 'user-science-1',
+        id: 'seed-science-1',
         name: 'Dr. Emily Zhang',
         email: 'emily.zhang@example.com',
         interests: ['scientific research', 'laboratory work', 'science communication', 'academic conferences'],
@@ -623,7 +623,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-science-2',
+        id: 'seed-science-2',
         name: 'David Miller',
         email: 'david.miller@example.com',
         interests: ['astronomy', 'space exploration', 'planetariums', 'science museums'],
@@ -637,7 +637,7 @@ const mockUsers: MockUser[] = [
 
     // Social Justice & Activism Cluster
     {
-        id: 'user-activism-1',
+        id: 'seed-activism-1',
         name: 'Aisha Johnson',
         email: 'aisha.johnson@example.com',
         interests: ['social justice', 'activism', 'community organizing', 'human rights'],
@@ -649,7 +649,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-activism-2',
+        id: 'seed-activism-2',
         name: 'Carlos Rodriguez',
         email: 'carlos.rodriguez@example.com',
         interests: ['environmental activism', 'climate change', 'sustainability', 'green initiatives'],
@@ -663,7 +663,7 @@ const mockUsers: MockUser[] = [
 
     // Travel & Culture Cluster
     {
-        id: 'user-travel-1',
+        id: 'seed-travel-1',
         name: 'Emma Wilson',
         email: 'emma.wilson@example.com',
         interests: ['international travel', 'cultural exchange', 'language immersion', 'global cultures'],
@@ -675,7 +675,7 @@ const mockUsers: MockUser[] = [
         ]
     },
     {
-        id: 'user-travel-2',
+        id: 'seed-travel-2',
         name: 'Ahmed Hassan',
         email: 'ahmed.hassan@example.com',
         interests: ['middle eastern culture', 'arabic language', 'cultural heritage', 'international cuisine'],

@@ -1,5 +1,5 @@
 import { generateEmbeddingDescription } from './embeddings';
-import { findBestVenue, VenueCandidate } from './google-places';
+import { findBestVenue, getPhotoUrl, VenueCandidate } from './google-places';
 import { PseudoEvent } from './pseudo-events';
 
 // Types for event generation
@@ -29,6 +29,7 @@ export interface Event {
     venueType?: string;
     venueRating?: number;
     venuePriceLevel?: number;
+    secondaryPhotoUrl?: string; // Secondary photo from Google Places
     hostId?: string | null;
     embedding?: string | null;
     attendeesCount: number;
@@ -111,7 +112,18 @@ export async function generateRealEvent(pseudoEvent: PseudoEvent, apiKey: string
     // Step 3: Generate embedding description
     const embeddingDescription = await generateEmbeddingDescription(pseudoEvent.description);
 
-    // Step 4: Create real event
+    // Step 4: Fetch secondary photo URL if available
+    let secondaryPhotoUrl: string | undefined;
+    if (venue.secondaryPhotoResourceName) {
+        try {
+            secondaryPhotoUrl = await getPhotoUrl(venue.secondaryPhotoResourceName, apiKey);
+            console.log(`📸 Secondary photo fetched for venue: ${venue.displayName.text}`);
+        } catch (error) {
+            console.warn(`⚠️ Failed to fetch secondary photo for venue: ${venue.displayName.text}`, error);
+        }
+    }
+
+    // Step 5: Create real event
     return {
         title: pseudoEvent.title,
         description: pseudoEvent.description,
@@ -130,6 +142,7 @@ export async function generateRealEvent(pseudoEvent: PseudoEvent, apiKey: string
         venueType: venue.types[0],
         venueRating: venue.rating,
         venuePriceLevel: venue.priceLevel ? parseInt(venue.priceLevel.toString().replace('PRICE_LEVEL_', '')) : undefined,
+        secondaryPhotoUrl: secondaryPhotoUrl,
         hostId: null, // System-generated
         embedding: null, // Generated after creation
         attendeesCount: 0,
