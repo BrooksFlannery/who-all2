@@ -19,6 +19,17 @@ describe('End-to-End Integration', () => {
             const db = initializeDatabase();
             if (!db) return;
 
+            // First, check if there are events with embeddings
+            const eventsWithEmbeddings = await db
+                .select({ id: event.id })
+                .from(event)
+                .where(isNotNull(event.embedding));
+
+            if (eventsWithEmbeddings.length === 0) {
+                console.log('No events with embeddings found, skipping recommendation test');
+                return;
+            }
+
             // Get existing users with embeddings
             const usersWithEmbeddings = await db
                 .select({

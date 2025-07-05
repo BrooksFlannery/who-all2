@@ -2,6 +2,7 @@ import { useAuth } from '@/components/AuthProvider';
 import { EventList } from '@/components/EventList';
 import { getAuthHeaders } from '@/lib/auth-client';
 import { Event, EventCategory } from '@/lib/db/types';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -10,7 +11,8 @@ const categories = ['Recommended', 'All', 'Fitness', 'Social', 'Creative', 'Tech
 type CategoryFilter = typeof categories[number];
 
 export default function EventsScreen() {
-  const { user, signOut } = useAuth();
+  const { signOut } = useAuth();
+  const router = useRouter();
   const [selectedCategory, setSelectedCategory] = useState<CategoryFilter>('Recommended');
   const [events, setEvents] = useState<Event[]>([]);
   const [recommendedEvents, setRecommendedEvents] = useState<Event[]>([]);
@@ -90,13 +92,7 @@ export default function EventsScreen() {
     }
   }, [selectedCategory]);
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-    } catch (error) {
-      console.error('Sign out failed:', error);
-    }
-  };
+  // handleSignOut function removed as it's not being used
 
   const filteredEvents = selectedCategory === 'Recommended'
     ? recommendedEvents
@@ -134,7 +130,7 @@ export default function EventsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Events</Text>
-        <Text style={styles.headerSubtitle}>Discover what's happening around you</Text>
+        <Text style={styles.headerSubtitle}>Discover what&apos;s happening around you</Text>
       </View>
 
       {/* Category Bar */}
@@ -187,8 +183,7 @@ export default function EventsScreen() {
         <EventList
           events={filteredEvents}
           onEventPress={(event: Event) => {
-            // TODO: Navigate to event detail view
-            console.log('Event pressed:', event.id);
+            router.push(`/event/${event.id}` as any);
           }}
         />
       )}

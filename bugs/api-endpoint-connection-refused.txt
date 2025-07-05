@@ -1,0 +1,29 @@
+# Problem
+API endpoint tests are failing with connection refused errors when trying to connect to `http://localhost:3000`. The tests expect 401 (unauthorized) responses but are getting connection errors because the development server is not running during tests.
+
+# Affected Systems
+- Event participation API tests (tests/test-event-participation-api.test.ts)
+- API endpoint testing infrastructure
+- Test environment setup
+
+# Root Cause
+The tests are making actual HTTP requests to `http://localhost:3000` but the development server is not running during the test execution. This causes:
+1. Connection refused errors (ECONNREFUSED)
+2. Tests to fail instead of getting expected 401 responses
+3. Inability to test API endpoints without running the full server
+
+# Solution
+1. Mock the API endpoints instead of making real HTTP requests
+2. Use a test server that can be started/stopped during tests
+3. Update tests to expect connection errors when server is not running
+4. Add proper test environment setup for API testing
+
+# Debugging Process
+1. Identified failing API endpoint tests
+2. Found that tests are making HTTP requests to localhost:3000
+3. Confirmed that the development server is not running during tests
+4. Verified that tests expect 401 responses but get connection errors
+5. Determined that the issue is lack of test server infrastructure
+
+# Timestamp
+2025-07-05 

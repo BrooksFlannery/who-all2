@@ -1,4 +1,4 @@
-import { boolean, integer, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
     id: text('id').primaryKey(),
@@ -102,11 +102,35 @@ export const event = pgTable("event", {
     interestedCount: integer("interested_count").default(0).notNull(),
 });
 
+// Event participation table
+export const eventParticipation = pgTable("event_participation", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    eventId: uuid("event_id").notNull().references(() => event.id, { onDelete: 'cascade' }),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: 'cascade' }),
+    status: text("status").notNull().$type<'attending' | 'interested'>(),
+    joinedAt: timestamp("joined_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => ({
+    uniqueEventUser: uniqueIndex("unique_event_user").on(table.eventId, table.userId),
+}));
+
+// Event messages table
+export const eventMessage = pgTable("event_messages", {
+    id: uuid("id").defaultRandom().primaryKey(),
+    eventId: uuid("event_id").notNull().references(() => event.id, { onDelete: 'cascade' }),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: 'cascade' }),
+    content: text("content").notNull(),
+    userName: text("user_name").notNull(),
+    userImage: text("user_image"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 export const schema = {
     user,
     session,
     account,
     verification,
     message,
-    event
+    event,
+    eventParticipation,
+    eventMessage
 }

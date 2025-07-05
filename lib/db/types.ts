@@ -1,6 +1,6 @@
 // TypeScript types for our database schema
 import { InferInsertModel, InferSelectModel } from 'drizzle-orm';
-import { event, message, user } from './schema';
+import { event, eventMessage, eventParticipation, message, user } from './schema';
 
 // Import Zod types for runtime validation
 import type {
@@ -18,7 +18,12 @@ export type Event = {
     description: string;
     embeddingDescription?: string;
     categories: EventCategory[];
+    venue?: any;
+    venueType?: string;
+    venueRating?: number;
+    venuePriceLevel?: number;
     hostId?: string;
+    embedding?: string;
     createdAt: Date;
     updatedAt: Date;
     attendeesCount: number;
@@ -30,6 +35,12 @@ export type EventInsert = InferInsertModel<typeof event>;
 export type User = InferSelectModel<typeof user>;
 export type Message = InferSelectModel<typeof message>;
 export type MessageInsert = InferInsertModel<typeof message>;
+
+// New types for event participation and messages
+export type EventParticipation = InferSelectModel<typeof eventParticipation>;
+export type EventParticipationInsert = InferInsertModel<typeof eventParticipation>;
+export type EventMessage = InferSelectModel<typeof eventMessage>;
+export type EventMessageInsert = InferInsertModel<typeof eventMessage>;
 
 // Custom types for better type safety
 export type Location = {

@@ -1,0 +1,33 @@
+# Database Initialization Required for Auth/Socket
+
+## Problem
+
+- The app, server, or tests fail with errors about missing or undefined database connection.
+- This happens when `initializeDatabase()` is not called before using the DB, or when tests do not mock it.
+
+## Symptoms
+
+- "Failed to initialize database for authentication"
+- "db is undefined" or similar errors in logs/tests
+- Flaky or failing socket/auth tests
+
+## Solution
+
+- Always call `initializeDatabase()` before using the DB in production/dev code.
+- In tests, always mock both `db` and `initializeDatabase` in the test setup.
+- If you add new scripts or move code, check that DB initialization is handled.
+
+## Example (test setup):
+
+```ts
+vi.mock('@/lib/db', () => ({
+    db: { /* ...mocked methods... */ },
+    initializeDatabase: vi.fn(() => ({ /* ...mocked methods... */ }))
+}))
+```
+
+## See also
+
+- `lib/db/index.ts`
+- `lib/auth.ts`
+- `tests/test-socket-server.test.ts` 

@@ -1,0 +1,184 @@
+# 🔥 Ultimate Quick-Fix Guide
+_Last updated: **2025-07-05**_
+
+This document fully replaces the previous `quick-fix.mdx`.
+It captures every lesson learned while fixing the **"Invalid authentication token / WebSocket won't connect"** bug.
+Follow it _exactly_ and you'll have working, TypeScript-clean real-time chat across **web, iOS, Android, expo-tunnel, and localhost**.
+
+---
+
+## 1  Executive Summary
+
+**Symptom**    • Expo app shows "Connecting..." forever, browser dev-tools show `websocket handshake error` or `Invalid authentication token`.
+
+**Cause**       1. Client and server on **different origins** (tunnel vs localhost).
+                2. Auth token sent in a format the server wasn't parsing.
+                3. Missing / wrong environment variables so the client guessed wrong URLs.
+
+**Fix (high-level)**
+1. **Unify URLs** with a single source of truth (`.env`).
+2. Always send **both** a Bearer token **and** a signed cookie.
+3. Harden server middleware: read token from `Authorization`, `Cookie`, or `handshake.auth`.
+
+---
+
+## 2  One-Time Pre-Flight Checklist ✅
+
+| Check | How | Expected |
+|------|-----|-----------|
+| Node ≥ 20 | `node -v` | `v20.x` |
+| `.env` exists | `cat .env` | All vars present (see below) |
+| Ports free | `lsof -i :8081,3001` | **no output** |
+| TypeScript clean | `npm run lint && npm run test` | **0 errors / 0 failing tests** |
+
+---
+
+## 3  Canonical .env (template)
+
+```env
+# --- Expo / Front-end ---
+EXPO_PUBLIC_CLIENT_URL=http://localhost:8081          # web preview OR tunnel host
+EXPO_PUBLIC_SOCKET_URL=http://localhost:3001          # Socket.IO base OR tunnel
+
+# --- Socket.IO Server ---
+SOCKET_PORT=3001
+NODE_ENV=development
+LOG_LEVEL=info
+
+# --- Better Auth ---
+BETTER_AUTH_SECRET=replace-with-32+-char-secret-key
+EXPO_PUBLIC_API_URL=http://localhost:8081             # REST API base (same origin as Expo dev-server)
+
+# --- Optional native tunnel fallback (blank = disabled) ---
+EXPO_PUBLIC_TUNNEL_HOST=id1234-anonymous              # only if you insist on `expo start --tunnel`
+```
+
+> Never hard-code URLs in code again—always reference these vars.
+
+---
+
+## 4  Code Changes (verify they **exist**)
+
+### 4.1 `lib/auth-client.ts`
+1. `getSocketAuthHeaders()` returns
+   ```ts
+   {
+     Authorization: "Bearer <token>",
+     Cookie: "better-auth.session_token=<token>"
+   }
+   ```
+2. Logging (`=== Getting Socket Auth Headers ===`) stays – it's gold while debugging.
+
+### 4.2 `lib/socket-client.ts`
+1. `socketUrl` = `process.env.EXPO_PUBLIC_SOCKET_URL` **first**, else tunnel fallback, else `localhost`.
+2. Connection opts:
+   ```ts
+   io(socketUrl, {
+     auth: authHeaders,            // payload for auth
+     extraHeaders: authHeaders,    // for polling transport
+     withCredentials: true,        // web cookie support
+     transports: ["websocket", "polling"],
+   });
+   ```
+3. Reconnect logic re-uses stored `authHeaders`.
+
+### 4.3 `lib/socket-server.ts`
+Middleware (simplified):
+```ts
+io.use(async (socket, next) => {
+  const h = socket.handshake;
+  const token =
+    h.auth?.token ??
+    h.headers.authorization?.match(/^Bearer (.+)$/)?.[1] ??
+    h.headers.cookie?.match(/better-auth\.session_token=([^;]+)/)?.[1];
+
+  if (!token) return next(err("no_token"));
+
+  const session = await auth.api.getSession({
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!session?.user?.id) return next(err("invalid_token"));
+
+  socket.userId = session.user.id;
+  next();
+});
+```
+CORS mirrors `.env`.
+
+### 4.4 `server.js`
+* Accept multiple origins:
+  ```js
+  origin: [
+    process.env.EXPO_PUBLIC_CLIENT_URL,
+    /\.exp\.direct$/,              // any expo-tunnel HTTPS
+  ],
+  ```
+* Fails fast if `EXPO_PUBLIC_SOCKET_URL` or `BETTER_AUTH_SECRET` missing.
+
+---
+
+## 5  Start-Up Recipes
+
+| Goal | Command |
+|------|---------|
+| _Full dev stack (Expo + Socket.IO)_ | `npm run dev` |
+| Expo only | `npm run start` |
+| Socket server only | `npm run start:socket` |
+| Validate env | `npm run validate:env` |
+
+> **Tunnel Users:** run `expo start --tunnel`, **then** set both `EXPO_PUBLIC_CLIENT_URL` and `EXPO_PUBLIC_SOCKET_URL` to your tunnel host and restart both servers.
+
+---
+
+## 6  Manual Validation Matrix 🧪
+
+| Step | How | Pass Criteria |
+|------|-----|---------------|
+| 1. Health route | `curl $EXPO_PUBLIC_SOCKET_URL/health` | `{status:"ready",socketIO:true}` |
+| 2. Session check | Look for `=== Debugging Session ===` in app console | shows user id |
+| 3. First socket connect | Watch dev-tools | `Socket connected` on both ends |
+| 4. Auth OK | Server prints `User authenticated: <id>` | No warnings |
+| 5. Send chat message | Type & send | Appears on second device |
+| 6. Reconnect | Kill server → restart | Client reconnects automatically |
+
+---
+
+## 7  Troubleshooting Cheatsheet
+
+| Error | Reason | Fix |
+|-------|--------|-----|
+| `Auth failed: no_token` | Missing headers | Ensure `getSocketAuthHeaders()` returns headers |
+| `Invalid session for token` | Expired token | Log out/in or refresh token |
+| CORS preflight blocked | Wrong `EXPO_PUBLIC_CLIENT_URL` | Match real origin (protocol+port) |
+| `websocket error 400` via tunnel | Socket URL still `localhost` | Update `.env` with tunnel host and restart |
+| Duplicate "Initializing Socket.IO server..." | Two servers running | Kill stray `node server.js` |
+
+---
+
+## 8  Automated Tests
+
+* `vitest run tests/test-socket-*` (unit + integration)
+* `scripts/test-socket-server.ts` (live end-to-end)
+* CI passes when all socket / env / integration tests are green
+
+---
+
+## 9  Rollback / Failsafe
+
+1. `git restore . && git clean -fd` to revert to last good commit.
+2. Re-run **Pre-Flight Checklist**.
+3. If still stuck: comment out the authentication middleware (`io.use(...)`) to confirm pure transport works; then re-enable and focus on token flow.
+
+---
+
+## 10  Final Victory Conditions 🏆
+
+- [ ] Web, iOS, Android all connect within 5 s.
+- [ ] "Invalid authentication token" never appears in logs.
+- [ ] All Vitest suites **pass**.
+- [ ] Hot-reload works without dropping the socket.
+- [ ] 🚀 Deploy with confidence.
+
+---
+
+_This guide is now the single source of truth. If something isn't in here, it's out of scope or future work. Happy hacking!_

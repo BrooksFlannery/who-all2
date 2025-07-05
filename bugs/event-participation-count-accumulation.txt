@@ -1,0 +1,29 @@
+# Problem
+Event participation integration tests are failing because counts are accumulating between tests. The tests expect counts to start at 0, but they're retaining values from previous tests, causing assertions like "expected 2 to be 0" to fail.
+
+# Affected Systems
+- Event participation integration tests (tests/test-event-participation-integration.test.ts)
+- Event participation database functions (lib/db/event-participation.ts)
+- Test cleanup and isolation
+
+# Root Cause
+The `afterEach` cleanup function in the test file is empty, so participation records created in one test are not being cleaned up before the next test runs. This causes:
+1. Counts to accumulate across tests
+2. Tests to fail when they expect counts to start at 0
+3. Test isolation issues
+
+# Solution
+1. Implement proper cleanup in the `afterEach` function to remove all participation records for the test event
+2. Reset event counts to 0 after each test
+3. Ensure each test starts with a clean state
+4. Consider using database transactions for test isolation
+
+# Debugging Process
+1. Identified failing tests in event participation integration tests
+2. Found that counts were not starting at 0 as expected
+3. Checked the `afterEach` cleanup function and found it was empty
+4. Verified that participation records persist between tests
+5. Confirmed that the issue is lack of proper test cleanup
+
+# Timestamp
+2025-07-05 
