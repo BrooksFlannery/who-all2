@@ -1,5 +1,5 @@
 import { ThemedText } from '@/components/ThemedText';
-import { useBackgroundColor, useTextColor } from '@/hooks/useThemeColor';
+import { useBorderColor, useCardBackgroundColor, useTextColor } from '@/hooks/useThemeColor';
 import * as Haptics from 'expo-haptics';
 import React from 'react';
 import { ActivityIndicator, StyleSheet, TouchableOpacity } from 'react-native';
@@ -19,8 +19,9 @@ export const JoinButton = React.memo(function JoinButton({
     loading = false,
     disabled = false
 }: JoinButtonProps) {
-    const backgroundColor = useBackgroundColor();
+    const backgroundColor = useCardBackgroundColor();
     const textColor = useTextColor();
+    const borderColor = useBorderColor();
 
     // Determine button state
     const isActive = currentStatus === status;
@@ -43,7 +44,7 @@ export const JoinButton = React.memo(function JoinButton({
             return [
                 styles.button,
                 styles.disabled,
-                { backgroundColor: backgroundColor }
+                { backgroundColor: backgroundColor, borderColor: borderColor }
             ];
         }
 
@@ -72,7 +73,7 @@ export const JoinButton = React.memo(function JoinButton({
             styles.inactive,
             {
                 backgroundColor: backgroundColor,
-                borderColor: textColor
+                borderColor: borderColor
             }
         ];
     };
@@ -134,14 +135,14 @@ const styles = StyleSheet.create({
         borderColor: '#007AFF',
     },
     inactive: {
-        borderColor: '#E5E5EA',
+        // borderColor will be set dynamically
     },
     switch: {
         borderColor: '#007AFF',
         borderWidth: 2,
     },
     disabled: {
-        borderColor: '#E5E5EA',
+        // borderColor will be set dynamically
         opacity: 0.5,
     },
     text: {

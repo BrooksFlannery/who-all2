@@ -1,7 +1,8 @@
 import { ThemedText } from '@/components/ThemedText';
-import { useTextColor } from '@/hooks/useThemeColor';
+import { useBackgroundColor, useBorderColor, useCardBackgroundColor, usePrimaryColor, useSecondaryTextColor, useTextColor } from '@/hooks/useThemeColor';
+import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { AttendeeList } from './AttendeeList';
 import { JoinButton } from './JoinButton';
@@ -21,13 +22,13 @@ interface User {
  */
 interface ParticipantSectionProps {
     participants: {
-        attending: User[];
-        interested: User[];
+        attending: any[];
+        interested: any[];
     };
     userParticipation: 'attending' | 'interested' | null;
-    onJoinEvent: (status: 'attending' | 'interested' | null) => void;
-    loadingStatus?: 'attending' | 'interested' | null;
-    isSignedIn?: boolean;
+    onJoinEvent: (status: 'attending' | 'interested') => Promise<void>;
+    loadingStatus: 'attending' | 'interested' | null;
+    isSignedIn: boolean;
 }
 
 /**
@@ -47,41 +48,47 @@ interface ParticipantSectionProps {
  * @param {ParticipantSectionProps} props - Component props
  * @returns {JSX.Element} The rendered participant section
  */
-export const ParticipantSection = React.memo(function ParticipantSection({
+export function ParticipantSection({
     participants,
     userParticipation,
     onJoinEvent,
-    loadingStatus = null,
-    isSignedIn = true
+    loadingStatus,
+    isSignedIn,
 }: ParticipantSectionProps) {
+    const [expandedSection, setExpandedSection] = useState<'attending' | 'interested' | null>(null);
+    const backgroundColor = useBackgroundColor();
+    const cardBackgroundColor = useCardBackgroundColor();
     const textColor = useTextColor();
+    const secondaryTextColor = useSecondaryTextColor();
+    const primaryColor = usePrimaryColor();
+    const borderColor = useBorderColor();
 
-    const handleJoinAttending = () => {
-        const newStatus = userParticipation === 'attending' ? null : 'attending';
-        onJoinEvent(newStatus);
-    };
+    const handleJoinEvent = useCallback(async (status: 'attending' | 'interested') => {
+        if (!isSignedIn) {
+            // Handle not signed in case
+            return;
+        }
 
-    const handleJoinInterested = () => {
-        const newStatus = userParticipation === 'interested' ? null : 'interested';
-        onJoinEvent(newStatus);
-    };
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        await onJoinEvent(status);
+    }, [isSignedIn, onJoinEvent]);
 
-    const handleUserPress = (user: User) => {
-        // TODO: Implement user profile modal or navigation
-        // For now, just show user name in a future implementation
-    };
+    const toggleSection = useCallback((section: 'attending' | 'interested') => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        setExpandedSection(expandedSection === section ? null : section);
+    }, [expandedSection]);
 
-    const isUserAttending = userParticipation === 'attending';
-    const isUserInterested = userParticipation === 'interested';
+    const attendingCount = participants.attending.length;
+    const interestedCount = participants.interested.length;
 
     return (
-        <View style={styles.container}>
+        <View style={[styles.container, { backgroundColor: cardBackgroundColor, borderBottomColor: borderColor }]}>
             {/* Attending Section */}
             <View style={[
                 styles.section,
-                isUserAttending && styles.activeSection
+                userParticipation === 'attending' && styles.activeSection
             ]}>
-                {isUserAttending && (
+                {userParticipation === 'attending' && (
                     <LinearGradient
                         colors={['rgba(0, 122, 255, 0.3)', 'rgba(0, 122, 255, 0)']}
                         start={{ x: 0, y: 0 }}
@@ -91,12 +98,10 @@ export const ParticipantSection = React.memo(function ParticipantSection({
                 )}
                 <View style={styles.contentRow}>
                     <View style={styles.attendeeContainer}>
-                        {participants.attending.length > 0 ? (
+                        {attendingCount > 0 ? (
                             <AttendeeList
-                                users={participants.attending}
-                                maxVisible={8}
-                                overlap={0.5}
-                                onUserPress={handleUserPress}
+                                users={participants.attending.slice(0, 4)}
+                                maxVisible={4}
                             />
                         ) : (
                             <View style={styles.emptyContainer}>
@@ -110,8 +115,9 @@ export const ParticipantSection = React.memo(function ParticipantSection({
                     <JoinButton
                         status="attending"
                         currentStatus={userParticipation}
-                        onPress={handleJoinAttending}
+                        onPress={() => handleJoinEvent('attending')}
                         loading={loadingStatus === 'attending'}
+                        disabled={!isSignedIn}
                     />
                 </View>
             </View>
@@ -119,9 +125,9 @@ export const ParticipantSection = React.memo(function ParticipantSection({
             {/* Interested Section */}
             <View style={[
                 styles.section,
-                isUserInterested && styles.activeSection
+                userParticipation === 'interested' && styles.activeSection
             ]}>
-                {isUserInterested && (
+                {userParticipation === 'interested' && (
                     <LinearGradient
                         colors={['rgba(0, 122, 255, 0.3)', 'rgba(0, 122, 255, 0)']}
                         start={{ x: 0, y: 0 }}
@@ -131,12 +137,10 @@ export const ParticipantSection = React.memo(function ParticipantSection({
                 )}
                 <View style={styles.contentRow}>
                     <View style={styles.attendeeContainer}>
-                        {participants.interested.length > 0 ? (
+                        {interestedCount > 0 ? (
                             <AttendeeList
-                                users={participants.interested}
-                                maxVisible={8}
-                                overlap={0.5}
-                                onUserPress={handleUserPress}
+                                users={participants.interested.slice(0, 4)}
+                                maxVisible={4}
                             />
                         ) : (
                             <View style={styles.emptyContainer}>
@@ -150,20 +154,20 @@ export const ParticipantSection = React.memo(function ParticipantSection({
                     <JoinButton
                         status="interested"
                         currentStatus={userParticipation}
-                        onPress={handleJoinInterested}
+                        onPress={() => handleJoinEvent('interested')}
                         loading={loadingStatus === 'interested'}
+                        disabled={!isSignedIn}
                     />
                 </View>
             </View>
         </View>
     );
-});
+}
 
 const styles = StyleSheet.create({
     container: {
         paddingHorizontal: 20,
         borderBottomWidth: 1,
-        borderBottomColor: '#E5E5EA',
     },
     section: {
         marginBottom: 8,
@@ -173,7 +177,6 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'transparent',
         position: 'relative',
-        overflow: 'hidden',
     },
     activeSection: {
         borderColor: 'transparent',

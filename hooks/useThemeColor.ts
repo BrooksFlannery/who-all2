@@ -25,8 +25,16 @@ export function useBackgroundColor(): string {
   return useThemeColor('background');
 }
 
+export function useSecondaryBackgroundColor(): string {
+  return useThemeColor('background.secondary');
+}
+
 export function useCardBackgroundColor(): string {
   return useThemeColor('background.card');
+}
+
+export function useMessageBackgroundColor(): string {
+  return useThemeColor('background.message');
 }
 
 export function useTextColor(): string {
@@ -39,6 +47,10 @@ export function useSecondaryTextColor(): string {
 
 export function useBorderColor(): string {
   return useThemeColor('border');
+}
+
+export function useErrorColor(): string {
+  return useThemeColor('error');
 }
 
 export function useShadowColor(): string {

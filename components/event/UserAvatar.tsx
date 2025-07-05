@@ -1,5 +1,5 @@
 import { ThemedText } from '@/components/ThemedText';
-import { useBackgroundColor, useTextColor } from '@/hooks/useThemeColor';
+import { useCardBackgroundColor, useTextColor } from '@/hooks/useThemeColor';
 import React from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 
@@ -15,7 +15,7 @@ interface UserAvatarProps {
 }
 
 export const UserAvatar = React.memo(function UserAvatar({ user, size = 40, showBorder = false }: UserAvatarProps) {
-    const backgroundColor = useBackgroundColor();
+    const backgroundColor = useCardBackgroundColor();
     const textColor = useTextColor();
 
     // Generate initials from name or email

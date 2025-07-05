@@ -1,5 +1,6 @@
 import { ThemedText } from '@/components/ThemedText';
-import { useBackgroundColor, useTextColor } from '@/hooks/useThemeColor';
+import { useBackgroundColor, useBorderColor, useCardBackgroundColor, useTextColor } from '@/hooks/useThemeColor';
+import * as Haptics from 'expo-haptics';
 import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
@@ -8,9 +9,8 @@ import { StyleSheet, TouchableOpacity, View } from 'react-native';
  */
 interface ChatBottomBarProps {
     onPress: () => void;
-    messageCount?: number;
-    disabled?: boolean;
-    showJoinMessage?: boolean;
+    messageCount: number;
+    unreadCount: number;
 }
 
 /**
@@ -23,97 +23,105 @@ interface ChatBottomBarProps {
  * @param {ChatBottomBarProps} props - Component props
  * @returns {JSX.Element} The rendered chat bottom bar
  */
-export const ChatBottomBar = React.memo(function ChatBottomBar({
-    onPress,
-    messageCount = 0,
-    disabled = false,
-    showJoinMessage = false
-}: ChatBottomBarProps) {
-    const textColor = useTextColor();
+export function ChatBottomBar({ onPress, messageCount, unreadCount }: ChatBottomBarProps) {
     const backgroundColor = useBackgroundColor();
+    const cardBackgroundColor = useCardBackgroundColor();
+    const textColor = useTextColor();
+    const borderColor = useBorderColor();
 
     const handlePress = () => {
-        if (!disabled) {
-            onPress();
-        }
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        onPress();
     };
 
     return (
-        <TouchableOpacity
-            style={[
-                styles.container,
-                { backgroundColor },
-                disabled && styles.disabled
-            ]}
-            onPress={handlePress}
-            disabled={disabled}
-            activeOpacity={0.8}
-        >
-            {/* Title */}
-            <View style={styles.titleContainer}>
-                <ThemedText style={[styles.title, { color: textColor }]}>
-                    Event Chat
-                </ThemedText>
-                {messageCount > 0 && (
-                    <ThemedText style={[styles.subtitle, { color: textColor }]}>
-                        {messageCount} message{messageCount !== 1 ? 's' : ''}
-                    </ThemedText>
-                )}
-            </View>
-
-            {/* Join Message */}
-            {showJoinMessage && (
-                <View style={styles.joinMessageContainer}>
-                    <ThemedText style={[styles.joinMessage, { color: textColor }]}>
-                        Join to chat
-                    </ThemedText>
+        <View style={[styles.container, { backgroundColor: cardBackgroundColor, borderTopColor: borderColor }]}>
+            <TouchableOpacity
+                style={styles.button}
+                onPress={handlePress}
+                activeOpacity={0.7}
+            >
+                <View style={styles.content}>
+                    <View style={styles.iconContainer}>
+                        {unreadCount > 0 && (
+                            <View style={styles.badge}>
+                                <ThemedText style={styles.badgeText}>
+                                    {unreadCount > 99 ? '99+' : unreadCount}
+                                </ThemedText>
+                            </View>
+                        )}
+                    </View>
+                    <View style={styles.textContainer}>
+                        <ThemedText style={[styles.title, { color: textColor }]}>
+                            Event Chat
+                        </ThemedText>
+                        <ThemedText style={[styles.subtitle, { color: textColor }]}>
+                            {messageCount} {messageCount === 1 ? 'message' : 'messages'}
+                            {unreadCount > 0 && ` • ${unreadCount} new`}
+                        </ThemedText>
+                    </View>
                 </View>
-            )}
-
-            {/* Arrow Icon */}
-            <ThemedText style={[styles.arrowIcon, { color: textColor }]}>
-                →
-            </ThemedText>
-        </TouchableOpacity>
+                <ThemedText style={[styles.chevron, { color: textColor }]}>›</ThemedText>
+            </TouchableOpacity>
+        </View>
     );
-});
+}
 
 const styles = StyleSheet.create({
     container: {
-        borderTopWidth: 1,
-        borderTopColor: '#E5E5EA',
+        borderTopWidth: 0.5,
         paddingHorizontal: 20,
-        paddingVertical: 16,
+        paddingVertical: 12,
+    },
+    button: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        borderRadius: 12,
     },
-    disabled: {
-        opacity: 0.5,
+    content: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
     },
-    titleContainer: {
+    iconContainer: {
+        position: 'relative',
+        marginRight: 12,
+    },
+    badge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        backgroundColor: '#FF3B30',
+        borderRadius: 8,
+        minWidth: 16,
+        height: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 4,
+    },
+    badgeText: {
+        color: '#FFFFFF',
+        fontSize: 10,
+        fontWeight: '600',
+    },
+    textContainer: {
         flex: 1,
     },
     title: {
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: '600',
         marginBottom: 2,
     },
     subtitle: {
         fontSize: 14,
         opacity: 0.6,
-        fontWeight: '400',
     },
-    arrowIcon: {
-        fontSize: 20,
-        fontWeight: '500',
-    },
-    joinMessageContainer: {
-        marginRight: 12,
-    },
-    joinMessage: {
-        fontSize: 12,
+    chevron: {
+        fontSize: 18,
+        fontWeight: '600',
         opacity: 0.6,
-        fontWeight: '400',
     },
 }); 

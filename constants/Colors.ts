@@ -19,11 +19,19 @@ const colors = {
 
   // Background colors
   background: {
-    light: '#FFFFFF',
-    dark: '#151718',
+    light: '#F8F9FA',
+    dark: '#0F0F0F',
+    secondary: {
+      light: '#E8E8E8',
+      dark: '#1F1F1F',
+    },
     card: {
       light: '#FFFFFF',
-      dark: '#1E1E1E',
+      dark: '#0F0F0F',
+    },
+    message: {
+      light: '#F0F0F0',
+      dark: '#2A2A2A',
     },
     overlay: {
       light: 'rgba(0, 0, 0, 0.4)',
@@ -144,14 +152,25 @@ export function getColor(colorPath: string, theme: 'light' | 'dark' = 'light'): 
   const path = colorPath.split('.');
   let current: any = colors;
 
+  // Traverse the path step-by-step
   for (const key of path) {
-    if (current[key] && typeof current[key] === 'object' && 'light' in current[key]) {
-      return current[key][theme];
+    if (!(key in current)) {
+      // Invalid path – fallback to brand primary
+      return colors.primary.light;
     }
     current = current[key];
   }
 
-  // Fallback to light theme if color not found
+  // At the end of traversal, determine the correct value
+  if (typeof current === 'object' && 'light' in current && 'dark' in current) {
+    return current[theme];
+  }
+
+  if (typeof current === 'string') {
+    return current;
+  }
+
+  // Final safeguard – fallback to brand primary
   return colors.primary.light;
 }
 

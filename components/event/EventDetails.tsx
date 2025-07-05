@@ -1,7 +1,6 @@
 import { ThemedText } from '@/components/ThemedText';
-import { useBackgroundColor, useSecondaryTextColor, useTextColor } from '@/hooks/useThemeColor';
+import { useBorderColor, useCardBackgroundColor, useSecondaryTextColor, useTextColor } from '@/hooks/useThemeColor';
 import { Event } from '@/lib/db/types';
-import React from 'react';
 import { ImageBackground, Linking, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 interface EventDetailsProps {
@@ -9,9 +8,10 @@ interface EventDetailsProps {
 }
 
 export function EventDetails({ event }: EventDetailsProps) {
+    const backgroundColor = useCardBackgroundColor();
     const textColor = useTextColor();
     const secondaryTextColor = useSecondaryTextColor();
-    const backgroundColor = useBackgroundColor();
+    const borderColor = useBorderColor();
 
     const formatDate = (date: Date | string) => {
         const eventDate = typeof date === 'string' ? new Date(date) : date;
@@ -62,15 +62,6 @@ export function EventDetails({ event }: EventDetailsProps) {
         }
     };
 
-    const renderRating = (rating?: number) => {
-        if (!rating) return null;
-        return (
-            <ThemedText style={[styles.venueMetaText, { color: secondaryTextColor }]}>
-                ⭐ {rating.toFixed(1)}
-            </ThemedText>
-        );
-    };
-
     const renderPriceLevel = (priceLevel?: number) => {
         if (!priceLevel) return null;
         return (
@@ -83,7 +74,7 @@ export function EventDetails({ event }: EventDetailsProps) {
     return (
         <View style={[styles.container, { backgroundColor }]}>
             {/* Venue and Time Row */}
-            <View style={styles.venueTimeRow}>
+            <View style={[styles.venueTimeRow, { borderBottomColor: borderColor }]}>
                 {event.location?.venueName && (
                     <TouchableOpacity
                         style={styles.venueContainer}
@@ -99,7 +90,6 @@ export function EventDetails({ event }: EventDetailsProps) {
                             </ThemedText>
                         )}
                         <View style={styles.venueMeta}>
-                            {renderRating(event.venueRating)}
                             {renderPriceLevel(event.venuePriceLevel)}
                         </View>
                     </TouchableOpacity>
@@ -153,7 +143,6 @@ const styles = StyleSheet.create({
         marginBottom: 24,
         paddingBottom: 16,
         borderBottomWidth: 1,
-        borderBottomColor: '#E5E5EA',
     },
     venueContainer: {
         flex: 1,

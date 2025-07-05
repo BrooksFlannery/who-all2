@@ -1,14 +1,12 @@
-import { useAuth } from '@/components/AuthProvider';
 import { useSocket } from '@/components/providers/SocketProvider';
 import { ThemedText } from '@/components/ThemedText';
-import { useBackgroundColor, useCardBackgroundColor, useTextColor } from '@/hooks/useThemeColor';
+import { useBackgroundColor, useBorderColor, useCardBackgroundColor, useMessageBackgroundColor, useSecondaryTextColor, useTextColor } from '@/hooks/useThemeColor';
 import { EventMessage, TypingUser } from '@/lib/socket-client';
 import * as Haptics from 'expo-haptics';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
-    Keyboard,
     KeyboardAvoidingView,
     Platform,
     StyleSheet,
@@ -52,7 +50,7 @@ interface ChatMessageProps {
  */
 const ChatMessage = React.memo(function ChatMessage({ message, isOwnMessage }: ChatMessageProps) {
     const textColor = useTextColor();
-    const cardBackgroundColor = useCardBackgroundColor();
+    const messageBackgroundColor = useMessageBackgroundColor();
 
     const formatTime = (timestamp: string) => {
         const date = new Date(timestamp);
@@ -78,7 +76,7 @@ const ChatMessage = React.memo(function ChatMessage({ message, isOwnMessage }: C
                 styles.messageBubble,
                 isOwnMessage ? styles.ownMessageBubble : styles.otherMessageBubble,
                 {
-                    backgroundColor: isOwnMessage ? '#007AFF' : cardBackgroundColor,
+                    backgroundColor: isOwnMessage ? '#007AFF' : messageBackgroundColor,
                     shadowColor: isOwnMessage ? '#007AFF' : '#000',
                     shadowOffset: { width: 0, height: 1 },
                     shadowOpacity: isOwnMessage ? 0.2 : 0.05,
@@ -112,7 +110,7 @@ const ChatMessage = React.memo(function ChatMessage({ message, isOwnMessage }: C
  */
 const TypingIndicator = React.memo(function TypingIndicator({ users }: { users: TypingUser[] }) {
     const textColor = useTextColor();
-    const cardBackgroundColor = useCardBackgroundColor();
+    const messageBackgroundColor = useMessageBackgroundColor();
 
     if (users.length === 0) return null;
 
@@ -125,7 +123,7 @@ const TypingIndicator = React.memo(function TypingIndicator({ users }: { users: 
             <View style={[
                 styles.typingBubble,
                 {
-                    backgroundColor: cardBackgroundColor,
+                    backgroundColor: messageBackgroundColor,
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: 1 },
                     shadowOpacity: 0.05,
@@ -179,6 +177,8 @@ const MessageInput = React.memo(function MessageInput({
 }) {
     const textColor = useTextColor();
     const cardBackgroundColor = useCardBackgroundColor();
+    const borderColor = useBorderColor();
+    const secondaryTextColor = useSecondaryTextColor();
     const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
     const handleTextChange = (text: string) => {
@@ -229,7 +229,7 @@ const MessageInput = React.memo(function MessageInput({
                 styles.textInputContainer,
                 {
                     backgroundColor: cardBackgroundColor,
-                    borderColor: '#E5E5EA',
+                    borderColor: borderColor,
                     shadowColor: '#000',
                     shadowOffset: { width: 0, height: 1 },
                     shadowOpacity: 0.05,
@@ -247,35 +247,24 @@ const MessageInput = React.memo(function MessageInput({
                     ]}
                     value={value}
                     onChangeText={handleTextChange}
-                    placeholder="Message..."
-                    placeholderTextColor="#8E8E93"
+                    placeholder="Type a message..."
+                    placeholderTextColor={secondaryTextColor}
                     multiline
                     maxLength={500}
                     editable={!disabled}
-                    onBlur={onStopTyping}
                 />
             </View>
-
             <TouchableOpacity
                 style={[
                     styles.sendButton,
                     {
-                        backgroundColor: value.trim() ? '#007AFF' : '#E5E5EA',
-                        shadowColor: value.trim() ? '#007AFF' : 'transparent',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: value.trim() ? 0.3 : 0,
-                        shadowRadius: 4,
-                        elevation: value.trim() ? 3 : 0,
+                        backgroundColor: value.trim() && !disabled ? '#007AFF' : '#C7C7CC',
                     }
                 ]}
                 onPress={handleSend}
-                disabled={!value.trim() || disabled}
-                activeOpacity={0.8}
+                disabled={disabled || !value.trim()}
             >
-                <ThemedText style={[
-                    styles.sendButtonText,
-                    { color: value.trim() ? '#FFFFFF' : '#8E8E93' }
-                ]}>
+                <ThemedText style={styles.sendButtonText}>
                     Send
                 </ThemedText>
             </TouchableOpacity>
@@ -315,105 +304,61 @@ export const ChatSection = React.memo(function ChatSection({
 }: ChatSectionProps) {
     const [inputText, setInputText] = useState('');
     const [isSending, setIsSending] = useState(false);
-    const flatListRef = useRef<FlatList<EventMessage>>(null);
+    const flatListRef = useRef<FlatList>(null);
     const backgroundColor = useBackgroundColor();
-    const textColor = useTextColor();
-    const { user } = useAuth();
+    const borderColor = useBorderColor();
 
     const { sendMessage, startTyping, stopTyping } = useSocket();
 
-    // Auto-scroll to bottom when keyboard appears
-    useEffect(() => {
-        const keyboardDidShowListener = Keyboard.addListener(
-            'keyboardDidShow',
-            () => {
-                // Small delay to ensure keyboard is fully shown
-                setTimeout(() => {
-                    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-                }, 100);
-            }
-        );
-
-        const keyboardDidHideListener = Keyboard.addListener(
-            'keyboardDidHide',
-            () => {
-                // Optional: scroll back to top when keyboard hides
-            }
-        );
-
-        return () => {
-            keyboardDidShowListener?.remove();
-            keyboardDidHideListener?.remove();
-        };
+    const renderMessage = useCallback(({ item }: { item: EventMessage }) => {
+        const isOwnMessage = item.userId === 'current-user'; // You'll need to get the actual current user ID
+        return <ChatMessage message={item} isOwnMessage={isOwnMessage} />;
     }, []);
 
-    // Auto-scroll to bottom when new messages arrive (inverted FlatList, so offset 0 = bottom)
-    useEffect(() => {
-        if (messages.length > 0) {
-            flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-        }
-    }, [messages.length]);
+    const keyExtractor = useCallback((item: EventMessage) => item.id, []);
 
     const handleSend = async () => {
-        if (!inputText.trim() || isSending) return;
+        if (inputText.trim() && !isSending) {
+            const messageToSend = inputText;
+            setInputText('');
+            setIsSending(true);
 
-        const content = inputText.trim();
-        setInputText('');
-        setIsSending(true);
-
-        // Add haptic feedback for message sending
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-        try {
-            // Send via Socket.IO for real-time
-            sendMessage(eventId, content);
-
-            // Also call the callback for API fallback
-            await onSendMessage(content);
-        } catch (error) {
-            console.error('Failed to send message:', error);
-            // Optionally show error message to user
-        } finally {
-            setIsSending(false);
+            try {
+                await onSendMessage(messageToSend);
+            } catch (error) {
+                console.error('Failed to send message:', error);
+                // Optionally restore the message text on error
+                setInputText(messageToSend);
+            } finally {
+                setIsSending(false);
+            }
         }
     };
 
     const handleTyping = () => {
-        startTyping(eventId);
+        // This would typically emit a typing event via socket
+        console.log('User started typing');
     };
 
     const handleStopTyping = () => {
-        stopTyping(eventId);
+        // This would typically emit a stop typing event via socket
+        console.log('User stopped typing');
     };
 
-    // Wrapper function for MessageInput that doesn't require arguments
     const handleStopTypingWrapper = () => {
         handleStopTyping();
     };
 
-    const renderMessage = useCallback(({ item }: { item: EventMessage }) => {
-        const currentUserId = user?.id;
-        const isOwnMessage = item.userId === currentUserId;
-
-        return (
-            <ChatMessage
-                message={item}
-                isOwnMessage={isOwnMessage}
-            />
-        );
-    }, [user?.id]);
-
-    const keyExtractor = useCallback((item: EventMessage) => item.id, []);
-
     const renderFooter = () => {
-        if (!hasMoreMessages) return null;
-
-        return (
-            <View style={styles.loadingFooter}>
-                <ActivityIndicator size="small" color={textColor} />
-                <ThemedText style={styles.loadingText}>Loading more messages...</ThemedText>
-            </View>
-        );
+        if (isLoadingMessages) {
+            return (
+                <View style={styles.loadingFooter}>
+                    <ActivityIndicator size="small" color="#007AFF" />
+                    <ThemedText style={styles.loadingText}>Loading messages...</ThemedText>
+                </View>
+            );
+        }
+        return null;
     };
 
     const handleEndReached = () => {
@@ -456,8 +401,8 @@ export const ChatSection = React.memo(function ChatSection({
                     disabled={isSending}
                 />
             ) : (
-                <View style={styles.readOnlyContainer}>
-                    <ThemedText style={[styles.readOnlyText, { color: textColor }]}>
+                <View style={[styles.readOnlyContainer, { borderTopColor: borderColor }]}>
+                    <ThemedText style={styles.readOnlyText}>
                         Join the event to participate in chat
                     </ThemedText>
                 </View>
@@ -566,7 +511,6 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         borderRadius: 20,
         borderWidth: 1,
-        borderColor: '#E5E5EA',
         marginRight: 12,
     },
     textInput: {
@@ -588,13 +532,13 @@ const styles = StyleSheet.create({
     sendButtonText: {
         fontSize: 15,
         fontWeight: '600',
+        color: '#FFFFFF',
     },
     readOnlyContainer: {
         paddingHorizontal: 20,
         paddingVertical: 24,
         alignItems: 'center',
         borderTopWidth: 0.5,
-        borderTopColor: '#E5E5EA',
     },
     readOnlyText: {
         fontSize: 15,

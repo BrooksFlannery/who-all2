@@ -1,5 +1,5 @@
 import { ThemedText } from '@/components/ThemedText';
-import { useBackgroundColor, useTextColor } from '@/hooks/useThemeColor';
+import { useCardBackgroundColor, useTextColor } from '@/hooks/useThemeColor';
 import React, { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Animated, {
@@ -43,7 +43,7 @@ export const AttendeeList = React.memo(function AttendeeList({
 }: AttendeeListProps) {
     const [expanded, setExpanded] = useState(false);
     const [isAnimating, setIsAnimating] = useState(false);
-    const backgroundColor = useBackgroundColor();
+    const backgroundColor = useCardBackgroundColor();
     const textColor = useTextColor();
 
     // Animation values

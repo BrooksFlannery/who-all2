@@ -7,7 +7,7 @@ import { ParticipantSection } from '@/components/event/ParticipantSection';
 import { useSocket } from '@/components/providers/SocketProvider';
 import { ThemedText } from '@/components/ThemedText';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { useBackgroundColor, useTextColor } from '@/hooks/useThemeColor';
+import { useBackgroundColor, useSecondaryBackgroundColor, useTextColor } from '@/hooks/useThemeColor';
 import { Event } from '@/lib/db/types';
 import { EventMessage, TypingUser } from '@/lib/socket-client';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -80,6 +80,7 @@ export const EventPage = React.memo(function EventPage() {
     const chatDrawerRef = useRef<{ present: () => void; dismiss: () => void }>(null);
 
     const backgroundColor = useBackgroundColor();
+    const secondaryBackgroundColor = useSecondaryBackgroundColor();
     const textColor = useTextColor();
 
     // Scroll view ref and offset for parallax effect
@@ -589,7 +590,7 @@ export const EventPage = React.memo(function EventPage() {
     }
 
     return (
-        <View style={[styles.container, { backgroundColor }]}>
+        <View style={[styles.container, { backgroundColor: secondaryBackgroundColor }]}>
             {/* Back Button - Absolute positioned */}
             <ThemedText style={styles.backButton} onPress={handleBackPress}>
                 ← Back
@@ -638,8 +639,7 @@ export const EventPage = React.memo(function EventPage() {
                 <ChatBottomBar
                     onPress={handleOpenChat}
                     messageCount={messages.length}
-                    disabled={!canSendMessage}
-                    showJoinMessage={!userParticipation && !!user}
+                    unreadCount={0}
                 />
             </Animated.ScrollView>
 
