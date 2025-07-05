@@ -28,6 +28,7 @@ CREATE TABLE "event" (
 	"venue_type" text,
 	"venue_rating" integer,
 	"venue_price_level" integer,
+	"secondary_photo_url" text,
 	"host_id" text,
 	"embedding" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,

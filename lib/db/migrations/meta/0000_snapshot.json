@@ -1,5 +1,5 @@
 {
-  "id": "abde1713-6861-49ae-b964-703a0aada10b",
+  "id": "2441f333-9978-472c-933a-133aa85dc9c9",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -177,6 +177,12 @@
         "venue_price_level": {
           "name": "venue_price_level",
           "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "secondary_photo_url": {
+          "name": "secondary_photo_url",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },

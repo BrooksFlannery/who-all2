@@ -92,6 +92,7 @@ export const event = pgTable("event", {
     venueType: text("venue_type"),            // Google type (gym, restaurant, park)
     venueRating: integer("venue_rating"),     // Google rating (1-50, stored as integer * 10)
     venuePriceLevel: integer("venue_price_level"), // Google price level (1-4)
+    secondaryPhotoUrl: text("secondary_photo_url"), // Secondary photo from Google Places
 
     hostId: text("host_id").references(() => user.id), // Optional - for user-hosted events
     embedding: text("embedding"), // VECTOR(1536) - will be cast in SQL

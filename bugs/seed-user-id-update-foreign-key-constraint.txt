@@ -1,0 +1,25 @@
+# Problem
+The seed user ID update script fails with foreign key constraint violations when trying to update user IDs from "user-" to "seed-" prefix. The script attempts to update user IDs before updating the related foreign key references in the message, eventParticipation, and eventMessage tables.
+
+# Affected Systems
+- scripts/update-seed-user-ids.ts
+- Database foreign key constraints between user table and related tables
+- Tests/test-seed-user-updates.test.ts
+
+# Root Cause
+The update script tries to update user IDs directly, but PostgreSQL foreign key constraints prevent updating a primary key when it's referenced by foreign keys in other tables. The script needs to update the foreign key references first, then update the user IDs.
+
+# Solution
+Modify the update script to:
+1. First update all foreign key references (message.userId, eventParticipation.userId, eventMessage.userId)
+2. Then update the user IDs
+3. Use a transaction to ensure atomicity
+
+# Debugging Process
+1. Identified foreign key constraint error: "update or delete on table "user" violates foreign key constraint"
+2. Found that the script was trying to update user IDs before updating related foreign key references
+3. The error occurs because PostgreSQL prevents updating primary keys that are referenced by foreign keys
+4. Need to reverse the order: update foreign keys first, then primary keys
+
+# Timestamp
+2024-12-19 

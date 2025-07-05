@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import { generateRealEvent } from '../lib/event-generation';
+import { assignSeedUsersToEvents } from './assign-seed-users-to-events';
 import { generatePseudoEvents } from './generate-pseudo-events';
 
 const GOOGLE_PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
@@ -10,7 +11,7 @@ if (!GOOGLE_PLACES_API_KEY) {
 }
 
 async function main() {
-    console.log('🚀 Running full pipeline: user interests → pseudo-events → real events');
+    console.log('🚀 Running full pipeline: user interests → pseudo-events → real events → seed user assignment');
 
     // Step 1: Generate pseudo-events
     const pseudoResult = await generatePseudoEvents();
@@ -36,6 +37,18 @@ async function main() {
         console.log(`\n${idx + 1}. Complete Real Event Data:`);
         console.log(JSON.stringify(event, null, 2));
     });
+
+    // Step 4: Automatically assign seed users to events
+    console.log('\n👥 Step 4: Automatically assigning seed users to events...');
+    const assignmentResult = await assignSeedUsersToEvents();
+
+    if (assignmentResult.success) {
+        console.log(`✅ Successfully assigned ${assignmentResult.usersAssigned} seed users to events`);
+        console.log(`   - ${assignmentResult.interestedAssignments} interested assignments`);
+        console.log(`   - ${assignmentResult.attendingAssignments} attending assignments`);
+    } else {
+        console.warn('⚠️ Seed user assignment failed or no seed users found');
+    }
 
     console.log('\n✨ Pipeline completed!');
 }
