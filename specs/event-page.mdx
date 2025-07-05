@@ -1,0 +1,629 @@
+# Event Page Technical Specification
+
+## Overview
+The event page is a full-screen detail view that displays comprehensive information about an event, including real-time chat functionality, attendee management, and user interaction features.
+
+## Core Features
+
+### 1. Event Information Display
+- **Full event details**: Title, description, date/time, venue, categories
+- **Venue photo**: Large hero image with parallax effect
+- **Location integration**: Clickable venue name opens Google Maps
+- **Category badges**: Visual indicators for event categories
+
+### 2. Attendee Management
+- **Attendance tracking**: Users can join "Attending" or "Interested" lists
+- **Real-time updates**: Live count updates when users join/leave
+- **Visual attendee list**: Overlapping circular avatars with expandable view
+
+### 3. Real-time Group Chat
+- **Socket.IO integration**: Live messaging for event participants
+- **Message persistence**: Last 100 messages stored in database
+- **Typing indicators**: Real-time typing status
+- **WhatsApp-style interface**: Newest messages at bottom, scroll up for history
+
+### 4. User Profile Integration
+- **Profile pictures**: URL-based system (no local storage required)
+- **Default avatars**: Fallback images for users without profile pictures
+- **User information**: Names displayed on avatar interaction
+
+## Database Schema Changes
+
+### New Table: `event_participation`
+```sql
+CREATE TABLE event_participation (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id UUID NOT NULL REFERENCES event(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+    status TEXT NOT NULL CHECK (status IN ('attending', 'interested')),
+    joined_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(event_id, user_id)
+);
+```
+
+### New Table: `event_messages`
+```sql
+CREATE TABLE event_messages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id UUID NOT NULL REFERENCES event(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    user_name TEXT NOT NULL,
+    user_image TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+### Updated Event Table
+```sql
+-- Add indexes for performance
+CREATE INDEX idx_event_participation_event_id ON event_participation(event_id);
+CREATE INDEX idx_event_participation_user_id ON event_participation(user_id);
+CREATE INDEX idx_event_messages_event_id ON event_messages(event_id);
+CREATE INDEX idx_event_messages_created_at ON event_messages(created_at DESC);
+```
+
+## API Endpoints
+
+### Event Management
+```typescript
+// Get event details with participation status
+GET /api/events/:id
+Response: {
+  event: Event,
+  userParticipation: 'attending' | 'interested' | null,
+  attendees: User[],
+  interested: User[]
+}
+
+// Join/Leave event
+POST /api/events/:id/participate
+Body: { status: 'attending' | 'interested' | null }
+Response: { success: boolean, newCounts: { attending: number, interested: number } }
+```
+
+### Chat Management
+```typescript
+// Get chat messages (paginated)
+GET /api/events/:id/messages?limit=20&before=timestamp
+Response: { messages: EventMessage[], hasMore: boolean }
+
+// Send message
+POST /api/events/:id/messages
+Body: { content: string }
+Response: { message: EventMessage }
+
+// Get typing status
+GET /api/events/:id/typing
+Response: { typingUsers: { userId: string, userName: string }[] }
+```
+
+## Socket.IO Implementation
+
+### Connection Setup
+```typescript
+// Client connection
+const socket = io(SERVER_URL, {
+  auth: { token: userToken }
+});
+
+// Join event room
+socket.emit('join-event', { eventId });
+
+// Leave event room
+socket.emit('leave-event', { eventId });
+```
+
+### Event Handlers
+```typescript
+// Message events
+socket.on('new-message', (message: EventMessage) => {
+  // Add message to chat
+});
+
+socket.on('user-typing', (data: { userId: string, userName: string }) => {
+  // Show typing indicator
+});
+
+socket.on('user-stopped-typing', (userId: string) => {
+  // Hide typing indicator
+});
+
+// Participation events
+socket.on('user-joined', (data: { userId: string, status: string, user: User }) => {
+  // Update attendee list and counts
+});
+
+socket.on('user-left', (data: { userId: string, status: string }) => {
+  // Update attendee list and counts
+});
+```
+
+### Server-side Socket Events
+```typescript
+// Handle message sending
+socket.on('send-message', async (data: { eventId: string, content: string }) => {
+  // Save to database
+  const message = await saveMessage(data);
+  
+  // Broadcast to room
+  io.to(`event-${data.eventId}`).emit('new-message', message);
+});
+
+// Handle typing indicators
+socket.on('typing', (data: { eventId: string }) => {
+  socket.to(`event-${data.eventId}`).emit('user-typing', {
+    userId: socket.userId,
+    userName: socket.userName
+  });
+});
+
+socket.on('stop-typing', (data: { eventId: string }) => {
+  socket.to(`event-${data.eventId}`).emit('user-stopped-typing', socket.userId);
+});
+```
+
+## Component Architecture
+
+### Main Event Page Component
+```typescript
+// app/(tabs)/event/[id].tsx
+export default function EventPage({ params }: { params: { id: string } }) {
+  const [event, setEvent] = useState<Event | null>(null);
+  const [participants, setParticipants] = useState<Participants>({ attending: [], interested: [] });
+  const [userParticipation, setUserParticipation] = useState<string | null>(null);
+  const [messages, setMessages] = useState<EventMessage[]>([]);
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  
+  // Socket connection and event handlers
+  // API calls for initial data
+  // Real-time updates
+  
+  return (
+    <View style={styles.container}>
+      <EventHeader event={event} />
+      <EventDetails event={event} />
+      <ParticipantSection 
+        participants={participants}
+        userParticipation={userParticipation}
+        onJoinEvent={handleJoinEvent}
+      />
+      <ChatSection 
+        messages={messages}
+        typingUsers={typingUsers}
+        onSendMessage={handleSendMessage}
+        canSendMessage={userParticipation !== null}
+      />
+    </View>
+  );
+}
+```
+
+### Participant Section Component
+```typescript
+// components/event/ParticipantSection.tsx
+export function ParticipantSection({ participants, userParticipation, onJoinEvent }) {
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Attending ({participants.attending.length})</Text>
+        <JoinButton 
+          status="attending" 
+          currentStatus={userParticipation}
+          onPress={() => onJoinEvent('attending')}
+        />
+      </View>
+      
+      <AttendeeList 
+        users={participants.attending}
+        maxVisible={8}
+        overlap={0.5}
+      />
+      
+      <View style={styles.header}>
+        <Text style={styles.title}>Interested ({participants.interested.length})</Text>
+        <JoinButton 
+          status="interested" 
+          currentStatus={userParticipation}
+          onPress={() => onJoinEvent('interested')}
+        />
+      </View>
+      
+      <AttendeeList 
+        users={participants.interested}
+        maxVisible={8}
+        overlap={0.5}
+      />
+    </View>
+  );
+}
+```
+
+### Attendee List Component
+```typescript
+// components/event/AttendeeList.tsx
+export function AttendeeList({ users, maxVisible, overlap }) {
+  const [expanded, setExpanded] = useState(false);
+  const visibleUsers = expanded ? users : users.slice(0, maxVisible);
+  
+  return (
+    <View style={styles.container}>
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.scrollView}
+      >
+        {visibleUsers.map((user, index) => (
+          <TouchableOpacity
+            key={user.id}
+            style={[
+              styles.avatar,
+              { 
+                marginLeft: index === 0 ? 0 : -overlap * AVATAR_SIZE,
+                zIndex: users.length - index
+              }
+            ]}
+            onPress={() => showUserProfile(user)}
+          >
+            <UserAvatar user={user} size={AVATAR_SIZE} />
+          </TouchableOpacity>
+        ))}
+        
+        {!expanded && users.length > maxVisible && (
+          <TouchableOpacity
+            style={styles.moreButton}
+            onPress={() => setExpanded(true)}
+          >
+            <Text style={styles.moreText}>+{users.length - maxVisible}</Text>
+          </TouchableOpacity>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+```
+
+### Chat Section Component
+```typescript
+// components/event/ChatSection.tsx
+export function ChatSection({ messages, typingUsers, onSendMessage, canSendMessage }) {
+  const [inputText, setInputText] = useState('');
+  const flatListRef = useRef<FlatList>(null);
+  
+  return (
+    <View style={styles.container}>
+      <FlatList
+        ref={flatListRef}
+        data={messages}
+        inverted
+        renderItem={({ item }) => <ChatMessage message={item} />}
+        keyExtractor={(item) => item.id}
+        onEndReached={loadOlderMessages}
+        onEndReachedThreshold={0.1}
+      />
+      
+      {typingUsers.length > 0 && (
+        <TypingIndicator users={typingUsers} />
+      )}
+      
+      {canSendMessage ? (
+        <MessageInput
+          value={inputText}
+          onChangeText={setInputText}
+          onSend={() => {
+            onSendMessage(inputText);
+            setInputText('');
+          }}
+        />
+      ) : (
+        <View style={styles.readOnlyMessage}>
+          <Text>Join the event to participate in chat</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+```
+
+## Navigation Implementation
+
+### Stack Navigator Setup
+```typescript
+// app/(tabs)/_layout.tsx
+import { createStackNavigator } from '@react-navigation/stack';
+
+const Stack = createStackNavigator();
+
+export default function TabLayout() {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen name="index" component={EventsScreen} />
+      <Stack.Screen 
+        name="event/[id]" 
+        component={EventPage}
+        options={{ headerShown: false }}
+      />
+    </Stack.Navigator>
+  );
+}
+```
+
+### Navigation from Event Cards
+```typescript
+// Update EventCard onPress handler
+const handleEventPress = (event: Event) => {
+  router.push(`/event/${event.id}`);
+};
+```
+
+## Styling and UI/UX
+
+### Color Scheme
+- Use existing theme hooks: `useTextColor`, `useCardBackgroundColor`, etc.
+- Maintain consistency with current EventCard design
+- Chat interface should feel modern and familiar (WhatsApp-inspired)
+
+### Layout Structure
+```
+┌─────────────────────────────────┐
+│ Event Header (Photo + Title)    │
+├─────────────────────────────────┤
+│ Event Details                   │
+│ (Date, Venue, Description)      │
+├─────────────────────────────────┤
+│ Attending (12) [Join]           │
+│ [Avatar Grid]                   │
+├─────────────────────────────────┤
+│ Interested (8) [Interested]     │
+│ [Avatar Grid]                   │
+├─────────────────────────────────┤
+│ Chat Section (Largest Area)     │
+│ [Messages]                      │
+│ [Typing Indicators]             │
+│ [Message Input]                 │
+└─────────────────────────────────┘
+```
+
+### Responsive Design
+- Single screen layout (no scrolling between sections)
+- Chat section takes up remaining space after other sections
+- Avatar overlap adapts to screen size
+- Message input always visible at bottom
+
+## Error Handling
+
+### Network Errors
+- Show error message for failed API calls
+- Retry mechanism for Socket.IO connection failures
+- Graceful degradation when real-time features unavailable
+
+### Validation
+- Message content validation (length, content filtering)
+- User permission checks for chat participation
+- Rate limiting for message sending
+
+## Performance Considerations
+
+### Lazy Loading
+- Load last 20 messages initially
+- Load older messages on scroll up
+- Load attendee list in chunks of 20
+- Lazy load user profile images
+
+### Memory Management
+- Clean up Socket.IO connections on component unmount
+- Limit message history in memory (keep last 100)
+- Optimize re-renders with React.memo and useMemo
+
+### Database Optimization
+- Indexes on frequently queried fields
+- Efficient pagination queries
+- Connection pooling for Socket.IO
+
+## Future Considerations
+
+### Scalability
+- Structure supports URL sharing (future feature)
+- Message archiving for old events
+- User blocking/muting capabilities
+- Event moderation tools
+
+### Enhanced Features
+- Image sharing in chat
+- Event reminders and notifications
+- User reputation system
+- Event analytics and insights
+
+## Implementation Checklist
+
+### Phase 1: Database Foundation
+- [x] Create migration file: `lib/db/migrations/0000_far_ricochet.sql` (includes both tables)
+- [x] Add `event_participation` table to `lib/db/schema.ts`
+- [x] Add `event_messages` table to `lib/db/schema.ts`
+- [x] Add database indexes to migration files
+- [x] Update `lib/db/types.ts` with new table types
+- [x] Update `lib/schemas.ts` with new Zod schemas
+- [x] Run database migrations
+- [x] Test database schema with sample data
+
+### Phase 2: Backend API - Event Participation
+- [x] Create `lib/db/event-participation.ts` with CRUD functions
+- [x] Create `lib/db/event-messages.ts` with CRUD functions
+- [x] Add `getEventWithParticipation` function to `lib/db/events.ts`
+- [x] Create API route: `app/api/events/[id]/+api.ts`
+- [x] Create API route: `app/api/events/[id]/participate/+api.ts`
+- [x] Create API route: `app/api/events/[id]/messages/+api.ts`
+- [x] Add authentication middleware to new API routes
+- [x] Test all new API endpoints with Postman/curl
+- [x] Update existing `/api/events` to include participation counts
+
+### Phase 3: Navigation Setup
+- [x] ~~Install `@react-navigation/stack` if not already installed~~ (Not needed - using Expo Router)
+- [x] Create `app/(tabs)/event/[id].tsx` file
+- [x] ~~Update `app/(tabs)/_layout.tsx` to use Stack.Navigator~~ (Not needed - using Expo Router file-based routing)
+- [x] ~~Add event route to navigation stack~~ (Not needed - using Expo Router file-based routing)
+- [x] Update `app/(tabs)/index.tsx` onEventPress to use router.push
+- [x] Test navigation from events list to event page
+- [x] Add back button to event page header
+- [x] Test back navigation from event page
+
+### Phase 4: Basic Event Page Layout
+- [x] Create `components/event/EventPage.tsx` component
+- [x] Add loading state to EventPage component
+- [x] Create `components/event/EventHeader.tsx` component
+- [x] Create `components/event/EventDetails.tsx` component
+- [x] Add basic styling to EventPage layout
+- [x] Test EventPage with hardcoded event data
+- [x] Connect EventPage to real event API
+- [x] Add error handling for failed event loading
+
+### Phase 5: Event Information Display
+- [x] Add parallax effect to EventHeader photo
+- [x] Add venue click handler to open Google Maps
+- [x] Create `components/event/CategoryBadge.tsx` component
+- [x] Display event categories as badges in EventDetails
+- [x] Add date formatting (Today, Tomorrow, etc.) to EventDetails
+- [x] Add venue rating display to EventDetails
+- [x] Add venue price level display to EventDetails
+- [x] Test EventDetails with various event data scenarios
+
+### Phase 6: Attendance UI Components
+- [x] Create `components/event/ParticipantSection.tsx` component
+- [x] Create `components/event/AttendeeList.tsx` component
+- [x] Create `components/event/JoinButton.tsx` component
+- [x] Create `components/event/UserAvatar.tsx` component
+- [x] Implement 50% overlap styling for avatars
+- [x] Add expandable functionality to AttendeeList
+- [x] Add default avatar fallback to UserAvatar
+- [x] Add user name display on avatar press
+
+### Phase 7: Attendance Backend Integration
+- [x] Connect ParticipantSection to participation API
+- [x] Add loading states to JoinButton
+- [x] Implement join/leave functionality in JoinButton
+- [x] Add visual feedback for current participation status
+- [x] Test switching between attending/interested
+- [x] Test leaving events (null status)
+- [x] Add error handling for failed participation changes
+- [x] Update event cards to show real-time counts
+
+### Phase 8: Socket.IO Client Setup
+- [x] Install `socket.io-client` package
+- [x] Create `lib/socket-client.ts` with connection setup
+- [x] Create `components/providers/SocketProvider.tsx` context
+- [x] Add SocketProvider to app root
+- [x] Implement room joining/leaving logic
+- [x] Add connection error handling
+- [x] Add reconnection logic
+- [x] Test Socket.IO connection stability
+
+### Phase 9: Chat Backend Implementation
+- [x] Create message saving function in `lib/db/event-messages.ts`
+- [x] Create message retrieval with pagination
+- [x] Add message content validation (length, content)
+- [x] Create Socket.IO message broadcasting in API
+- [x] Add typing indicator storage and cleanup
+- [x] Create typing indicator broadcasting
+- [x] Test message persistence and retrieval
+- [x] Add message cleanup for events older than 30 days
+
+### Phase 10: Chat UI Components
+- [x] Create `components/event/ChatSection.tsx` component
+- [x] Create `components/event/ChatMessage.tsx` component (integrated in ChatSection)
+- [x] Create `components/event/MessageInput.tsx` component (integrated in ChatSection)
+- [x] Create `components/event/TypingIndicator.tsx` component (integrated in ChatSection)
+- [x] Implement FlatList for messages (inverted)
+- [x] Add absolute timestamp display to messages
+- [x] Style messages to look like WhatsApp
+- [x] Add loading states for message sending
+
+### Phase 11: Real-time Chat Integration
+- [x] Connect ChatSection to Socket.IO
+- [x] Implement real-time message receiving
+- [x] Add typing indicators to chat
+- [x] Implement message sending through Socket.IO
+- [x] Add auto-scroll to bottom for new messages
+- [x] Implement lazy loading for older messages (20 at a time)
+- [x] Add message sending validation
+- [x] Test real-time chat with multiple users
+
+### Phase 12: Chat Participation Control
+- [x] Add read-only mode for non-participants
+- [x] Show "Join to chat" message for non-participants
+- [x] Implement chat permission checks in UI
+- [x] Add visual indicators for chat permissions
+- [x] Test chat access with different participation statuses
+- [x] Handle edge case: user leaves event while chatting
+- [x] Add chat permission checks in Socket.IO
+- [x] Test chat permissions with multiple users
+
+### Phase 13: Real-time Attendance Updates
+- [x] Implement real-time attendee count updates
+- [x] Add live attendee list updates via Socket.IO
+- [x] Broadcast user join/leave events
+- [x] Update attendee avatars in real-time
+- [x] Add visual feedback for new attendees
+- [x] Test real-time updates with multiple users
+- [x] Handle concurrent user actions
+- [x] Test edge cases with rapid join/leave actions
+
+### Phase 14: Performance Optimization
+- [x] Add lazy loading for attendee lists (load 20 at a time)
+- [x] Optimize message pagination (load 20 messages initially)
+- [x] Add image caching for user avatars
+- [x] Add React.memo to all event components
+- [x] Implement useMemo for expensive calculations
+- [x] Optimize FlatList rendering for large lists
+- [x] Add Socket.IO event debouncing
+- [x] Test performance with 100+ attendees
+
+### Phase 15: Error Handling
+- [x] Add error boundary to EventPage component
+- [x] Add network error handling to all API calls
+- [x] Add retry mechanisms for failed API calls
+- [x] Handle Socket.IO disconnection gracefully
+- [x] Add input validation for all user inputs
+- [x] Test error scenarios (network down, server errors)
+- [x] Add user-friendly error messages
+- [x] Add offline mode indicators
+
+### Phase 16: UI/UX Polish
+- [x] Add haptic feedback to JoinButton presses
+- [x] Add haptic feedback to message sending
+- [x] Add loading skeletons for event loading
+- [x] Polish avatar overlap animations
+- [x] Add pull-to-refresh to event page
+- [x] Implement proper keyboard handling for chat input
+- [x] Test UI on different screen sizes (iPhone SE to iPad)
+
+### Phase 17: Testing
+- [x] Write unit tests for EventPage component
+- [x] Write unit tests for ParticipantSection component
+- [x] Write unit tests for ChatSection component
+- [x] Add integration tests for participation API
+- [x] Add integration tests for chat API
+- [x] Test Socket.IO functionality with multiple clients
+- [x] Test with various network conditions (slow, offline)
+
+### Phase 18: Documentation & Cleanup
+- [x] Add JSDoc comments to all new functions
+- [x] Document all new components in README
+- [x] Update API documentation
+- [x] Create user guide for event page features
+- [x] Remove unused imports and code
+- [x] Optimize bundle size with code splitting
+- [x] Add proper TypeScript types to all components
+- [x] Final code review and cleanup
+
+## Testing Strategy
+
+### Unit Tests
+- Component rendering tests
+- API endpoint tests
+- Database operation tests
+
+### Integration Tests
+- Socket.IO connection tests
+- Real-time update tests
+- Navigation flow tests
+

@@ -40,6 +40,10 @@ export default {
         },
         extra: {
             EXPO_PUBLIC_DATABASE_URL: process.env.EXPO_PUBLIC_DATABASE_URL || process.env.DATABASE_URL,
+            EXPO_PUBLIC_SOCKET_URL: process.env.EXPO_PUBLIC_SOCKET_URL || "http://localhost:3001",
+            EXPO_PUBLIC_CLIENT_URL: process.env.EXPO_PUBLIC_CLIENT_URL || "http://localhost:8081",
+            NODE_ENV: process.env.NODE_ENV || "development",
+            LOG_LEVEL: process.env.LOG_LEVEL || "info",
         },
     },
 }; 

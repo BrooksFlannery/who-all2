@@ -1,5 +1,5 @@
 import { authClient } from '@/lib/auth-client';
-import { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
 type User = {
     id: string;

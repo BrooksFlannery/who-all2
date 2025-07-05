@@ -43,7 +43,7 @@ describe('Pseudo-Event Generation', () => {
         it('should extract title from event description', () => {
             const description = 'Rock Climbing Meetup - Join us for an exciting climbing session!';
             const title = extractTitle(description);
-            expect(title).toBe('Rock Climbing Meetup - Join us for an exciting climbing session!');
+            expect(title).toBe('Rock Climbing Meetup');
         });
 
         it('should extract title from simple title', () => {

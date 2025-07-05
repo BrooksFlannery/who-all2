@@ -22,6 +22,19 @@ const getBaseURL = () => {
     return tunnelUrl;
 };
 
+// Get socket URL for cross-platform compatibility
+const getSocketURL = () => {
+    const envSocketUrl = process.env.EXPO_PUBLIC_SOCKET_URL;
+    if (envSocketUrl) {
+        console.log("Using EXPO_PUBLIC_SOCKET_URL from env:", envSocketUrl);
+        return envSocketUrl;
+    }
+    // Fallback to localhost for development
+    const fallbackUrl = "http://localhost:3001";
+    console.log("No EXPO_PUBLIC_SOCKET_URL found, using fallback:", fallbackUrl);
+    return fallbackUrl;
+};
+
 
 console.log("=== Auth Client Configuration ===");
 console.log("Platform:", Platform.OS);
@@ -51,6 +64,48 @@ export const debugSession = async () => {
     }
 };
 
+// Helper function to get socket authentication headers
+export const getSocketAuthHeaders = async () => {
+    try {
+        console.log("=== Getting Socket Auth Headers ===");
+        const session = await authClient.getSession();
+
+        if (!session?.data?.session?.token) {
+            console.log("No session token available for socket authentication");
+            return null;
+        }
+
+        const token = session.data.session.token;
+        const headers: Record<string, string> = {};
+
+        // Try to get signed cookie first
+        if (typeof authClient.getCookie === 'function') {
+            try {
+                const fullCookie = await (authClient as any).getCookie();
+                if (fullCookie) {
+                    headers['Cookie'] = fullCookie;
+                    console.log('Socket auth: Using signed cookie from getCookie()');
+                } else {
+                    headers['Authorization'] = `Bearer ${token}`;
+                    console.log('Socket auth: Using Bearer token (getCookie() returned empty)');
+                }
+            } catch (cookieErr) {
+                console.warn('Socket auth: getCookie() failed, using Bearer token:', cookieErr);
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+        } else {
+            headers['Authorization'] = `Bearer ${token}`;
+            console.log('Socket auth: Using Bearer token (no getCookie() available)');
+        }
+
+        console.log("Socket auth headers:", Object.keys(headers));
+        return headers;
+    } catch (error) {
+        console.error("Error getting socket auth headers:", error);
+        return null;
+    }
+};
+
 // Helper function to get auth headers for fetch requests
 export const getAuthHeaders = async () => {
     try {
@@ -69,28 +124,42 @@ export const getAuthHeaders = async () => {
             // The session object already contains the token!
             // From the logs, we can see: session.data.session.token
             if (session.data?.session?.token) {
-                headers['Authorization'] = `Bearer ${session.data.session.token}`;
-                // Prefer full signed cookie from auth client if available
+                const token = session.data.session.token;
+
+                // Always provide Bearer token for API calls
+                headers['Authorization'] = `Bearer ${token}`;
+
+                // Generate signed cookie for socket authentication
+                let signedCookie = '';
                 if (typeof authClient.getCookie === 'function') {
                     try {
                         const fullCookie = await (authClient as any).getCookie();
                         if (fullCookie) {
-                            headers['Cookie'] = fullCookie;
-                            console.log('Added Authorization header and FULL Better Auth cookie from getCookie()');
+                            signedCookie = fullCookie;
+                            console.log('Using FULL Better Auth cookie from getCookie()');
                         } else {
-                            headers['Cookie'] = `better-auth.session_token=${session.data.session.token}`;
+                            signedCookie = `better-auth.session_token=${token}`;
                             console.log('getCookie() returned empty, using unsigned token as fallback');
                         }
                     } catch (cookieErr) {
                         console.warn('getCookie() failed:', cookieErr);
-                        headers['Cookie'] = `better-auth.session_token=${session.data.session.token}`;
+                        signedCookie = `better-auth.session_token=${token}`;
                     }
                 } else {
-                    headers['Cookie'] = `better-auth.session_token=${session.data.session.token}`;
-                    console.log('Added Authorization header and Better Auth cookie with token from session (no getCookie())');
+                    signedCookie = `better-auth.session_token=${token}`;
+                    console.log('Using Better Auth cookie with token from session (no getCookie())');
                 }
-                console.log("Token:", session.data.session.token);
-                console.log("Cookie header:", headers['Cookie']);
+
+                // Add both token formats for maximum compatibility
+                headers['Cookie'] = signedCookie;
+
+                // Log token format validation
+                console.log("=== Token Format Validation ===");
+                console.log("Bearer token format:", `Bearer ${token.substring(0, 10)}...`);
+                console.log("Cookie format:", signedCookie.substring(0, 50) + "...");
+                console.log("Token length:", token.length);
+                console.log("Cookie length:", signedCookie.length);
+
             } else {
                 console.log("No token found in session data");
                 console.log("Session structure:", JSON.stringify(session, null, 2));

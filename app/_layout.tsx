@@ -6,6 +6,7 @@ import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 
 import { AuthProvider, useAuth } from '@/components/AuthProvider';
+import { SocketProvider } from '@/components/providers/SocketProvider';
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { usePrimaryColor } from '@/hooks/useThemeColor';
 
@@ -28,18 +29,20 @@ function RootLayoutContent() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        {user ? (
-          [
-            <Stack.Screen key="tabs" name="(tabs)" options={{ headerShown: false }} />,
-            <Stack.Screen key="nf" name="+not-found" />
-          ]
-        ) : (
-          [
-            <Stack.Screen key="signin" name="(auth)/sign-in" options={{ headerShown: false }} />
-          ]
-        )}
-      </Stack>
+      <SocketProvider>
+        <Stack>
+          {user ? (
+            [
+              <Stack.Screen key="tabs" name="(tabs)" options={{ headerShown: false }} />,
+              <Stack.Screen key="nf" name="+not-found" />
+            ]
+          ) : (
+            [
+              <Stack.Screen key="signin" name="(auth)/sign-in" options={{ headerShown: false }} />
+            ]
+          )}
+        </Stack>
+      </SocketProvider>
     </ThemeProvider>
   );
 }

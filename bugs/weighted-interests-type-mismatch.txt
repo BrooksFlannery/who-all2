@@ -1,0 +1,30 @@
+# Problem
+The `weightedInterests` field is defined as `text` in the database schema and is being stored as a string, but the database query is returning it as an object instead of a string. This causes the test `should have meaningful interest summaries` to fail with the error "expected 'object' to be 'string'".
+
+# Affected Systems
+- Database schema (lib/db/schema.ts)
+- Database connection test (tests/test-database-connection.test.ts)
+- User data retrieval and storage
+
+# Root Cause
+The issue appears to be that the database driver is automatically parsing the `weighted_interests` field as JSON when it should be treated as a plain text string. This could be due to:
+1. The field containing JSON-like content that the driver is auto-parsing
+2. A configuration issue with the database driver
+3. The field being stored as JSONB instead of TEXT in the actual database
+
+# Solution
+1. Verify the actual database column type for `weighted_interests`
+2. Ensure the field is being stored and retrieved as TEXT, not JSONB
+3. Update the test to handle the actual data type being returned
+4. Consider using explicit type casting in the query if needed
+
+# Debugging Process
+1. Identified the failing test in test-database-connection.test.ts
+2. Found that the test expects `weightedInterests` to be a string but receives an object
+3. Checked the schema definition which shows it should be TEXT
+4. Verified the migration file shows the correct column type
+5. Found that the data is being stored as a string in the embeddings.ts file
+6. The issue is likely in the database driver's automatic JSON parsing
+
+# Timestamp
+2025-07-05 

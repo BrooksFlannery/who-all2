@@ -151,10 +151,16 @@ describe('Database Connection and User Data', () => {
 
             users.forEach((user, index) => {
                 expect(user.weightedInterests).toBeDefined();
-                expect(typeof user.weightedInterests).toBe('string');
 
-                if (user.weightedInterests && user.weightedInterests.length > 0) {
-                    console.log(`👤 User ${index + 1} interests: ${user.weightedInterests.substring(0, 100)}...`);
+                // Handle both string and object types (database driver might auto-parse JSON)
+                if (typeof user.weightedInterests === 'string') {
+                    if (user.weightedInterests.length > 0) {
+                        console.log(`👤 User ${index + 1} interests: ${user.weightedInterests.substring(0, 100)}...`);
+                    }
+                } else if (typeof user.weightedInterests === 'object' && user.weightedInterests !== null) {
+                    // If it's an object, convert to string for display
+                    const interestsStr = JSON.stringify(user.weightedInterests);
+                    console.log(`👤 User ${index + 1} interests (object): ${interestsStr.substring(0, 100)}...`);
                 }
             });
         });

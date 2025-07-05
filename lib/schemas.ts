@@ -97,6 +97,41 @@ export const summarizationResponseSchema = z.object({
     summaryLength: z.number().int().min(0).optional(),
 });
 
+// Event participation validation
+export const eventParticipationStatusSchema = z.enum(['attending', 'interested']);
+
+export const eventParticipationSchema = z.object({
+    id: z.string().uuid(),
+    eventId: z.string().uuid(),
+    userId: z.string(),
+    status: eventParticipationStatusSchema,
+    joinedAt: z.string().datetime(),
+});
+
+export const eventParticipationRequestSchema = z.object({
+    status: eventParticipationStatusSchema.nullable(), // null means leave event
+});
+
+// Event message validation
+export const eventMessageSchema = z.object({
+    id: z.string().uuid(),
+    eventId: z.string().uuid(),
+    userId: z.string(),
+    content: z.string().min(1).max(1000), // Limit message length
+    userName: z.string().min(1).max(100),
+    userImage: z.string().url().nullable().optional(),
+    createdAt: z.string().datetime(),
+});
+
+export const eventMessageRequestSchema = z.object({
+    content: z.string().min(1).max(1000),
+});
+
+export const eventMessagesResponseSchema = z.object({
+    messages: z.array(eventMessageSchema),
+    hasMore: z.boolean(),
+});
+
 // Type exports for TypeScript
 export type ChatMessage = z.infer<typeof chatMessageSchema>;
 export type ChatRequest = z.infer<typeof chatRequestSchema>;
@@ -106,4 +141,10 @@ export type EventsResponse = z.infer<typeof eventsResponseSchema>;
 export type User = z.infer<typeof userSchema>;
 export type ErrorResponse = z.infer<typeof errorResponseSchema>;
 export type EventCategory = z.infer<typeof eventCategorySchema>;
-export type Location = z.infer<typeof locationSchema>; 
+export type Location = z.infer<typeof locationSchema>;
+export type EventParticipation = z.infer<typeof eventParticipationSchema>;
+export type EventParticipationRequest = z.infer<typeof eventParticipationRequestSchema>;
+export type EventMessage = z.infer<typeof eventMessageSchema>;
+export type EventMessageRequest = z.infer<typeof eventMessageRequestSchema>;
+export type EventMessagesResponse = z.infer<typeof eventMessagesResponseSchema>;
+export type EventParticipationStatus = z.infer<typeof eventParticipationStatusSchema>; 

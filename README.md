@@ -10,6 +10,10 @@ Who-All is an AI-powered event generation system that creates personalized event
 - **Enhanced Personalized Recommendations**: Advanced embedding-based matching with weighted interests
 - **Real-time Chat Analysis**: Summarizes conversations to extract weighted user interests
 - **Dual Description System**: Human-readable and machine-optimized descriptions for better matching
+- **Interactive Event Pages**: Full-featured event detail pages with real-time chat and participation management
+- **Real-time Chat System**: Socket.IO-powered group chat with typing indicators and message persistence
+- **Event Participation Management**: Join/leave events with real-time attendee list updates
+- **Responsive UI Components**: Modern, accessible components with haptic feedback and smooth animations
 
 ## 🏗️ System Architecture
 
@@ -263,6 +267,13 @@ npm run run:with-seed:all
 - `POST /api/events/generate` - Generate new events from user clusters
 - `POST /api/events/recommendations` - Get personalized event recommendations
 - `GET /api/events` - List all events
+- `GET /api/events/:id` - Get event details with participation status
+- `POST /api/events/:id/participate` - Join/leave event (attending/interested)
+
+### Chat Management
+- `GET /api/events/:id/messages` - Get chat messages with pagination
+- `POST /api/events/:id/messages` - Send a message to event chat
+- `GET /api/socket` - Socket.IO connection endpoint
 
 ### User Management
 - `POST /api/users/interests` - Update user interests
@@ -305,14 +316,35 @@ who-all2/
 ├── app/                    # Expo Router app directory
 │   ├── (auth)/            # Authentication screens
 │   ├── (tabs)/            # Main app tabs
+│   │   └── event/         # Event detail pages
 │   └── api/               # API routes
+│       ├── events/        # Event management endpoints
+│       ├── chat/          # Chat and messaging endpoints
+│       └── socket/        # Socket.IO connection endpoint
 ├── components/            # React components
+│   ├── event/            # Event page components
+│   │   ├── EventPage.tsx # Main event page component
+│   │   ├── EventHeader.tsx # Event header with parallax photo
+│   │   ├── EventDetails.tsx # Event information display
+│   │   ├── ParticipantSection.tsx # Attendee management
+│   │   ├── ChatSection.tsx # Real-time chat interface
+│   │   ├── AttendeeList.tsx # Expandable attendee list
+│   │   ├── JoinButton.tsx # Participation controls
+│   │   ├── UserAvatar.tsx # User avatar component
+│   │   └── CategoryBadge.tsx # Event category badges
+│   └── providers/        # Context providers
+│       └── SocketProvider.tsx # Socket.IO connection management
 ├── lib/                   # Core library code
 │   ├── db/               # Database schema and migrations
+│   │   ├── event-participation.ts # Event participation CRUD
+│   │   ├── event-messages.ts # Chat message CRUD
+│   │   └── events.ts     # Event management functions
 │   ├── embeddings.ts     # OpenAI embedding utilities with weighted interests
 │   ├── google-places.ts  # Google Places API integration
 │   ├── pseudo-events.ts  # Pseudo-event generation
-│   └── event-generation.ts # Event generation pipeline
+│   ├── event-generation.ts # Event generation pipeline
+│   ├── socket-client.ts  # Socket.IO client utilities
+│   └── socket-server.ts  # Socket.IO server setup
 ├── scripts/              # Utility scripts
 │   ├── generate-pseudo-events.ts
 │   ├── test-venue-search.ts
@@ -323,9 +355,46 @@ who-all2/
 └── specs/                # System specifications
 ```
 
-## 🔍 Key Algorithms
+## 🎯 Event Page Features
 
-### Enhanced Embedding System
+### Interactive Event Details
+The event page provides a comprehensive view of event information with modern UI/UX:
+
+- **Parallax Header**: Hero image with smooth parallax scrolling effect
+- **Event Information**: Title, description, date/time, venue details with Google Maps integration
+- **Category Badges**: Visual indicators for event categories
+- **Venue Details**: Rating, price level, and clickable venue name for directions
+
+### Real-time Participation Management
+Users can interact with events through an intuitive participation system:
+
+- **Join/Leave Controls**: Toggle between "Attending" and "Interested" status
+- **Visual Feedback**: Loading states, haptic feedback, and optimistic UI updates
+- **Real-time Updates**: Live attendee count updates via Socket.IO
+- **Attendee Lists**: Expandable lists with overlapping avatars and user information
+
+### Real-time Chat System
+Full-featured group chat with modern messaging features:
+
+- **Socket.IO Integration**: Real-time message delivery and typing indicators
+- **Message Persistence**: Messages stored in database with pagination support
+- **Typing Indicators**: Visual feedback when users are typing
+- **Message History**: Load older messages on scroll with infinite pagination
+- **User Avatars**: Profile pictures with fallback to default avatars
+- **Message Timestamps**: Absolute timestamps for message context
+- **Character Limits**: 500 character limit with validation
+- **Read-only Mode**: Non-participants can view but not send messages
+
+### Responsive Design
+The event page adapts to different screen sizes and orientations:
+
+- **Single Screen Layout**: All sections visible without scrolling between sections
+- **Keyboard Awareness**: Proper handling of keyboard appearance for chat input
+- **Haptic Feedback**: Tactile feedback for button presses and interactions
+- **Loading States**: Skeleton loading and progress indicators
+- **Error Handling**: Graceful error states with retry mechanisms
+
+## 🔍 Key Algorithms
 The system uses a dual-description approach for improved recommendation quality:
 
 **User Weighted Interests**: Activity-based profiles with importance weights

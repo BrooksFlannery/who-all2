@@ -283,4 +283,71 @@ export async function deleteEventById(id: string): Promise<boolean> {
         console.error(`❌ Error deleting event with ID ${id}:`, error);
         throw error;
     }
+}
+
+/**
+ * Get an event with participation information
+ * @param eventId - The event ID
+ * @param userId - The user ID to check participation status
+ * @returns Promise<{ event: Event, userParticipation: 'attending' | 'interested' | null, attendees: any[], interested: any[] } | null>
+ */
+export async function getEventWithParticipation(
+    eventId: string,
+    userId: string
+): Promise<{
+    event: Event,
+    userParticipation: 'attending' | 'interested' | null,
+    attendees: any[],
+    interested: any[]
+} | null> {
+    const database = initializeDatabase();
+    if (!database) {
+        throw new Error('Database not available');
+    }
+
+    try {
+        // Get the event
+        const eventResult = await database.select().from(event).where(eq(event.id, eventId));
+
+        if (eventResult.length === 0) {
+            return null;
+        }
+
+        const dbEvent = eventResult[0];
+        const eventData: Event = {
+            title: dbEvent.title,
+            description: dbEvent.description,
+            embeddingDescription: dbEvent.embeddingDescription || undefined,
+            categories: dbEvent.categories,
+            date: dbEvent.date,
+            location: dbEvent.location as { lat: number; lng: number; neighborhood?: string },
+            venue: dbEvent.venue as any,
+            venueType: dbEvent.venueType || undefined,
+            venueRating: dbEvent.venueRating ? dbEvent.venueRating / 10 : undefined,
+            venuePriceLevel: dbEvent.venuePriceLevel || undefined,
+            hostId: dbEvent.hostId || undefined,
+            embedding: dbEvent.embedding || undefined,
+            attendeesCount: dbEvent.attendeesCount,
+            interestedCount: dbEvent.interestedCount
+        };
+
+        // Import participation functions
+        const { getUserParticipationStatus, getEventParticipants } = await import('./event-participation');
+
+        // Get user participation status and participants
+        const [userParticipation, participants] = await Promise.all([
+            getUserParticipationStatus(eventId, userId),
+            getEventParticipants(eventId)
+        ]);
+
+        return {
+            event: eventData,
+            userParticipation,
+            attendees: participants.attending,
+            interested: participants.interested
+        };
+    } catch (error) {
+        console.error(`❌ Error getting event with participation for event ${eventId}:`, error);
+        throw error;
+    }
 } 
