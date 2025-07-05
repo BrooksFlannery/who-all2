@@ -9,8 +9,17 @@ const getBaseURL = () => {
         // Use relative path; same origin
         return "";
     }
-    // On native, use the tunnel URL since we're running with --tunnel
-    return "https://idlbcxe-anonymous-8081.exp.direct";
+    // On native, use environment variable or fallback to tunnel URL
+    const envUrl = process.env.EXPO_PUBLIC_API_URL;
+    if (envUrl) {
+        console.log("Using EXPO_PUBLIC_API_URL from env:", envUrl);
+        return envUrl;
+    }
+    // Fallback to tunnel URL since we're running with --tunnel
+    // Use http:// for tunnel URLs to match server protocol
+    const tunnelUrl = "http://idlbcxe-anonymous-8081.exp.direct";
+    console.log("No EXPO_PUBLIC_API_URL found, using fallback:", tunnelUrl);
+    return tunnelUrl;
 };
 
 
@@ -61,9 +70,30 @@ export const getAuthHeaders = async () => {
             // From the logs, we can see: session.data.session.token
             if (session.data?.session?.token) {
                 headers['Authorization'] = `Bearer ${session.data.session.token}`;
-                console.log("Added Authorization header with token from session");
+                // Prefer full signed cookie from auth client if available
+                if (typeof authClient.getCookie === 'function') {
+                    try {
+                        const fullCookie = await (authClient as any).getCookie();
+                        if (fullCookie) {
+                            headers['Cookie'] = fullCookie;
+                            console.log('Added Authorization header and FULL Better Auth cookie from getCookie()');
+                        } else {
+                            headers['Cookie'] = `better-auth.session_token=${session.data.session.token}`;
+                            console.log('getCookie() returned empty, using unsigned token as fallback');
+                        }
+                    } catch (cookieErr) {
+                        console.warn('getCookie() failed:', cookieErr);
+                        headers['Cookie'] = `better-auth.session_token=${session.data.session.token}`;
+                    }
+                } else {
+                    headers['Cookie'] = `better-auth.session_token=${session.data.session.token}`;
+                    console.log('Added Authorization header and Better Auth cookie with token from session (no getCookie())');
+                }
+                console.log("Token:", session.data.session.token);
+                console.log("Cookie header:", headers['Cookie']);
             } else {
                 console.log("No token found in session data");
+                console.log("Session structure:", JSON.stringify(session, null, 2));
             }
 
             return headers;
