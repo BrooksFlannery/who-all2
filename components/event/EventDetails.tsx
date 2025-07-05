@@ -1,6 +1,5 @@
-import { CategoryBadge } from '@/components/event/CategoryBadge';
 import { ThemedText } from '@/components/ThemedText';
-import { useSecondaryTextColor, useTextColor } from '@/hooks/useThemeColor';
+import { useBackgroundColor, useSecondaryTextColor, useTextColor } from '@/hooks/useThemeColor';
 import { Event } from '@/lib/db/types';
 import React from 'react';
 import { Linking, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -12,6 +11,7 @@ interface EventDetailsProps {
 export function EventDetails({ event }: EventDetailsProps) {
     const textColor = useTextColor();
     const secondaryTextColor = useSecondaryTextColor();
+    const backgroundColor = useBackgroundColor();
 
     const formatDate = (date: Date | string) => {
         const eventDate = typeof date === 'string' ? new Date(date) : date;
@@ -62,8 +62,6 @@ export function EventDetails({ event }: EventDetailsProps) {
         }
     };
 
-
-
     const renderPriceLevel = (priceLevel?: number) => {
         if (!priceLevel) return null;
         return '💰'.repeat(priceLevel);
@@ -75,10 +73,32 @@ export function EventDetails({ event }: EventDetailsProps) {
     };
 
     return (
-        <View style={styles.container}>
-            {/* Date and Time */}
-            <View style={styles.dateTimeContainer}>
-                <View style={styles.dateContainer}>
+        <View style={[styles.container, { backgroundColor }]}>
+            {/* Venue and Time Row */}
+            <View style={styles.venueTimeRow}>
+                {event.location?.venueName && (
+                    <TouchableOpacity
+                        style={styles.venueContainer}
+                        onPress={handleVenuePress}
+                        activeOpacity={0.7}
+                    >
+                        <ThemedText style={[styles.venueName, { color: textColor }]}>
+                            {event.location.venueName}
+                        </ThemedText>
+                        {event.location.neighborhood && (
+                            <ThemedText style={[styles.neighborhood, { color: secondaryTextColor }]}>
+                                {event.location.neighborhood}
+                            </ThemedText>
+                        )}
+                        <View style={styles.venueMeta}>
+                            {renderRating(event.venueRating)}
+                            {renderPriceLevel(event.venuePriceLevel)}
+                        </View>
+                    </TouchableOpacity>
+                )}
+
+                {/* Time Information */}
+                <View style={styles.timeContainer}>
                     <ThemedText style={[styles.dateText, { color: textColor }]}>
                         {formatDate(event.date)}
                     </ThemedText>
@@ -88,53 +108,8 @@ export function EventDetails({ event }: EventDetailsProps) {
                 </View>
             </View>
 
-            {/* Venue Information */}
-            {event.location?.venueName && (
-                <View style={styles.venueContainer}>
-                    <ThemedText style={styles.sectionTitle}>Location</ThemedText>
-                    <TouchableOpacity
-                        style={styles.venueRow}
-                        onPress={handleVenuePress}
-                        activeOpacity={0.7}
-                    >
-                        <View style={styles.venueInfo}>
-                            <ThemedText style={[styles.venueName, { color: textColor }]}>
-                                {event.location.venueName}
-                            </ThemedText>
-                            {event.location.neighborhood && (
-                                <ThemedText style={[styles.neighborhood, { color: secondaryTextColor }]}>
-                                    {event.location.neighborhood}
-                                </ThemedText>
-                            )}
-                            <View style={styles.venueMeta}>
-                                {renderRating(event.venueRating)}
-                                {renderPriceLevel(event.venuePriceLevel)}
-                            </View>
-                        </View>
-                        <ThemedText style={styles.mapsLink}>📍</ThemedText>
-                    </TouchableOpacity>
-                </View>
-            )}
-
-            {/* Categories */}
-            {event.categories && event.categories.length > 0 && (
-                <View style={styles.categoriesContainer}>
-                    <ThemedText style={styles.sectionTitle}>Categories</ThemedText>
-                    <View style={styles.categoriesList}>
-                        {event.categories.map((category, index) => (
-                            <CategoryBadge
-                                key={index}
-                                category={category}
-                                size="medium"
-                            />
-                        ))}
-                    </View>
-                </View>
-            )}
-
             {/* Description */}
             <View style={styles.descriptionContainer}>
-                <ThemedText style={styles.sectionTitle}>About</ThemedText>
                 <ScrollView
                     style={styles.descriptionScroll}
                     showsVerticalScrollIndicator={false}
@@ -153,66 +128,53 @@ const styles = StyleSheet.create({
     container: {
         padding: 20,
     },
-    dateTimeContainer: {
+    venueTimeRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
         marginBottom: 24,
-    },
-    dateContainer: {
-        alignItems: 'flex-start',
-    },
-    dateText: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginBottom: 4,
-    },
-    timeText: {
-        fontSize: 16,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#E5E5EA',
     },
     venueContainer: {
-        marginBottom: 24,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        marginBottom: 12,
-    },
-    venueRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        backgroundColor: 'rgba(0, 0, 0, 0.05)',
-        borderRadius: 12,
-    },
-    venueInfo: {
         flex: 1,
+        marginRight: 12,
     },
     venueName: {
-        fontSize: 16,
-        fontWeight: '500',
-        marginBottom: 4,
+        fontSize: 22,
+        fontWeight: '600',
+        marginBottom: 6,
     },
     neighborhood: {
-        fontSize: 14,
-        marginBottom: 4,
+        fontSize: 16,
+        marginBottom: 6,
     },
     venueMeta: {
         flexDirection: 'row',
-        alignItems: 'center',
         gap: 8,
+    },
+    timeContainer: {
+        alignItems: 'flex-end',
+    },
+    dateText: {
+        fontSize: 18,
+        fontWeight: '700',
+        textAlign: 'right',
+    },
+    timeText: {
+        fontSize: 16,
+        textAlign: 'right',
+        opacity: 0.8,
+    },
+    sectionTitle: {
+        fontSize: 20,
+        fontWeight: '600',
+        marginBottom: 16,
     },
     mapsLink: {
-        fontSize: 20,
+        fontSize: 22,
     },
-    categoriesContainer: {
-        marginBottom: 24,
-    },
-    categoriesList: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-    },
-
     descriptionContainer: {
         marginBottom: 24,
     },
@@ -220,7 +182,7 @@ const styles = StyleSheet.create({
         maxHeight: 200,
     },
     descriptionText: {
-        fontSize: 16,
-        lineHeight: 24,
+        fontSize: 18,
+        lineHeight: 26,
     },
 }); 

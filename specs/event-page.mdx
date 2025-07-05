@@ -56,6 +56,9 @@ CREATE TABLE event_messages (
 
 ### Updated Event Table
 ```sql
+-- Add secondary photo field for Google Places integration
+ALTER TABLE event ADD COLUMN secondary_photo_url TEXT;
+
 -- Add indexes for performance
 CREATE INDEX idx_event_participation_event_id ON event_participation(event_id);
 CREATE INDEX idx_event_participation_user_id ON event_participation(user_id);

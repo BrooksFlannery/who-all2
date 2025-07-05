@@ -1,3 +1,4 @@
+import { CategoryBadge } from '@/components/event/CategoryBadge';
 import { ThemedText } from '@/components/ThemedText';
 import { VenuePhoto } from '@/components/VenuePhoto';
 import { Event } from '@/lib/db/types';
@@ -29,15 +30,8 @@ export function EventHeader({ event, scrollOffset }: EventHeaderProps) {
                 {
                     translateY: interpolate(
                         scrollOffset.value,
-                        [-HEADER_HEIGHT, 0, HEADER_HEIGHT],
-                        [-HEADER_HEIGHT / 2, 0, HEADER_HEIGHT * 0.75]
-                    ),
-                },
-                {
-                    scale: interpolate(
-                        scrollOffset.value,
-                        [-HEADER_HEIGHT, 0, HEADER_HEIGHT],
-                        [1.2, 1, 1]
+                        [0, HEADER_HEIGHT],
+                        [0, HEADER_HEIGHT * 0.2]
                     ),
                 },
             ],
@@ -53,17 +47,30 @@ export function EventHeader({ event, scrollOffset }: EventHeaderProps) {
                     height={HEADER_HEIGHT}
                     borderRadius={0}
                 />
-
-                {/* Title Overlay */}
-                <LinearGradient
-                    colors={['transparent', 'rgba(0, 0, 0, 0.2)', 'rgba(0, 0, 0, 0.5)', 'rgba(0, 0, 0, 0.8)']}
-                    style={styles.titleOverlay}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 0, y: 1 }}
-                >
-                    <ThemedText style={styles.eventTitle}>{cleanTitle}</ThemedText>
-                </LinearGradient>
             </Animated.View>
+
+            {/* Categories - Top Right */}
+            {event.categories && event.categories.length > 0 && (
+                <View style={styles.categoriesContainer}>
+                    {event.categories.map((category, index) => (
+                        <CategoryBadge
+                            key={index}
+                            category={category}
+                            size="small"
+                        />
+                    ))}
+                </View>
+            )}
+
+            {/* Title Overlay - Fixed Position */}
+            <LinearGradient
+                colors={['transparent', 'rgba(0, 0, 0, 0.4)', 'rgba(0, 0, 0, 0.7)', 'rgba(0, 0, 0, 0.9)']}
+                style={styles.titleOverlay}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 1 }}
+            >
+                <ThemedText style={styles.eventTitle}>{cleanTitle}</ThemedText>
+            </LinearGradient>
         </View>
     );
 }
@@ -76,6 +83,7 @@ const styles = StyleSheet.create({
         position: 'relative',
         width: '100%',
         height: HEADER_HEIGHT,
+        zIndex: 1,
     },
     titleOverlay: {
         position: 'absolute',
@@ -84,7 +92,8 @@ const styles = StyleSheet.create({
         right: 0,
         paddingHorizontal: 20,
         paddingBottom: 20,
-        paddingTop: 60,
+        paddingTop: 100,
+        zIndex: 3,
     },
     eventTitle: {
         fontSize: 28,
@@ -94,5 +103,13 @@ const styles = StyleSheet.create({
         textShadowOffset: { width: 0, height: 1 },
         textShadowRadius: 3,
         lineHeight: 34,
+    },
+    categoriesContainer: {
+        position: 'absolute',
+        top: 16,
+        right: 16,
+        flexDirection: 'row',
+        gap: 6,
+        zIndex: 4,
     },
 }); 
