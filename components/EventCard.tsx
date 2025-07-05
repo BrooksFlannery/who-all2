@@ -44,7 +44,7 @@ export function EventCard({ event, onPress, compact = false, scrollY, index }: E
     const neighborhood = event.location?.neighborhood;
 
     // Debug logging for photo reference
-    console.log('EventCard:', event.title, 'photoReference:', event.location?.photoReference);
+
 
     const formatDate = (date: Date | string) => {
         const eventDate = typeof date === 'string' ? new Date(date) : date;

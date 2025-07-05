@@ -18,9 +18,9 @@ export async function broadcastParticipationUpdate(
                 // User left the event
                 socketServer.broadcastUserLeft(eventId, userId, 'left');
             }
-            console.log(`Broadcasted participation update for user ${userId} in event ${eventId}`);
+            // Broadcasted participation update
         } else {
-            console.log('Socket.IO server not ready, skipping broadcast');
+            // Socket.IO server not ready, skipping broadcast
         }
     } catch (error) {
         console.error('Error broadcasting participation update:', error);
@@ -44,10 +44,10 @@ export async function broadcastNewMessage(message: {
             const io = socketServer.getIO();
             if (io) {
                 io.to(`event-${message.eventId}`).emit('new-message', message);
-                console.log(`Broadcasted new message ${message.id} to event ${message.eventId}`);
+                // Broadcasted new message
             }
         } else {
-            console.log('Socket.IO server not ready, skipping message broadcast');
+            // Socket.IO server not ready, skipping message broadcast
         }
     } catch (error) {
         console.error('Error broadcasting new message:', error);

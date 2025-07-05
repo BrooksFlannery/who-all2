@@ -18,10 +18,10 @@ export function VenuePhoto({ photoReference, height, borderRadius = 0 }: VenuePh
     const gradientColors = useGradientColors('fallback');
 
     useEffect(() => {
-        console.log('VenuePhoto: photoReference =', photoReference);
+
 
         if (!photoReference) {
-            console.log('VenuePhoto: No photo reference, showing gradient fallback');
+
             setIsLoading(false);
             setHasError(true);
             return;
@@ -30,7 +30,7 @@ export function VenuePhoto({ photoReference, height, borderRadius = 0 }: VenuePh
         // Fetch the actual photo URL from our backend API
         const fetchPhotoUrl = async () => {
             try {
-                console.log('VenuePhoto: Fetching photo URL for:', photoReference);
+
                 setIsLoading(true);
                 setHasError(false);
 
@@ -39,12 +39,11 @@ export function VenuePhoto({ photoReference, height, borderRadius = 0 }: VenuePh
                     headers: authHeaders
                 });
 
-                console.log('VenuePhoto: Response status:', response.status);
+
 
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('VenuePhoto: Photo URL received:', data.photoUrl?.substring(0, 100) + '...');
-                    console.log('VenuePhoto: Full photo URL:', data.photoUrl);
+
                     setImageUrl(data.photoUrl);
                 } else {
                     const errorText = await response.text();
@@ -102,7 +101,7 @@ export function VenuePhoto({ photoReference, height, borderRadius = 0 }: VenuePh
                 source={{ uri: imageUrl }}
                 style={[styles.image, { height, borderRadius }]}
                 resizeMode="cover"
-                onLoad={() => console.log('VenuePhoto: Image loaded successfully')}
+                onLoad={() => { }}
                 onError={(error) => console.error('VenuePhoto: Image failed to load:', error.nativeEvent)}
             />
         </Animated.View>

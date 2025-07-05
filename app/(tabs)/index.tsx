@@ -32,7 +32,7 @@ export default function EventsScreen() {
       if (response.ok) {
         const data = await response.json();
         setRecommendedEvents(data.events || []);
-        console.log('Loaded', data.events?.length || 0, 'recommended events');
+
       } else {
         console.error('Failed to load recommended events');
         setRecommendedEvents([]);
@@ -48,30 +48,29 @@ export default function EventsScreen() {
   // Load events from database
   useEffect(() => {
     const loadEvents = async () => {
-      console.log("=== Loading events from database ===");
+
       try {
         const authHeaders = await getAuthHeaders();
-        console.log("Auth headers for events request:", authHeaders);
+
 
         const response = await fetch('/api/events', {
           headers: authHeaders
         });
-        console.log("Events response status:", response.status);
+
 
         if (response.ok) {
           const data = await response.json();
-          console.log("Events response data:", data);
+
           if (data.events) {
             setEvents(data.events);
-            console.log('Loaded', data.events.length, 'events from database');
+            // Events loaded successfully
           } else {
-            console.log('No events found in database');
+            // No events found in database
             setEvents([]);
           }
         } else {
-          console.log("Events request failed with status:", response.status);
           const errorText = await response.text();
-          console.log("Events error response:", errorText);
+          console.error("Events request failed:", errorText);
           setError(`Failed to load events: ${response.status}`);
         }
       } catch (error) {

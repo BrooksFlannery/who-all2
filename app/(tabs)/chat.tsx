@@ -11,11 +11,11 @@ export default function ChatScreen() {
   // Load message history when component mounts (only once)
   useEffect(() => {
     const loadHistory = async () => {
-      console.log('📚 Loading chat history...');
+
       setIsLoadingHistory(true);
       try {
         await loadMessageHistory();
-        console.log('✅ Chat history loaded successfully');
+
       } catch (error) {
         console.error('❌ Failed to load chat history:', error);
       } finally {
@@ -33,10 +33,10 @@ export default function ChatScreen() {
 
   // Function to trigger event comparisons (debug feature)
   const handleCompareEvents = useCallback(async () => {
-    console.log('🔘 Event comparison button clicked');
+
     setIsComparingEvents(true);
     try {
-      console.log('📡 Making request to /api/events/recommendations...');
+
       const response = await fetch('/api/events/recommendations', {
         method: 'POST',
         headers: {
@@ -44,35 +44,28 @@ export default function ChatScreen() {
         },
       });
 
-      console.log('📥 Response received, status:', response.status);
       const result = await response.json();
-      console.log('📋 Response data:', result);
 
       if (response.ok) {
-        console.log('✅ Event comparison successful');
         const count = result.recommendations?.length || 0;
         Alert.alert(
           'Event Comparison Complete',
           `Found ${count} event recommendations. Check console for details.`
         );
       } else {
-        console.log('❌ Event comparison failed:', result);
         Alert.alert('Error', 'Failed to get event recommendations.');
       }
     } catch (error) {
       console.error('💥 Event comparison request failed:', error);
       Alert.alert('Error', 'Failed to connect to recommendations service.');
     } finally {
-      console.log('🏁 Event comparison process finished');
       setIsComparingEvents(false);
     }
   }, []);
 
   // Function to trigger user embedding generation (debug feature)
   const handleGenerateEmbeddings = useCallback(async () => {
-    console.log('🔘 Generate embeddings button clicked');
     try {
-      console.log('📡 Making request to /api/chat/summarize...');
       const response = await fetch('/api/chat/summarize', {
         method: 'POST',
         headers: {
@@ -80,18 +73,14 @@ export default function ChatScreen() {
         },
       });
 
-      console.log('📥 Response received, status:', response.status);
       const result = await response.json();
-      console.log('📋 Response data:', result);
 
       if (response.ok) {
-        console.log('✅ Embedding generation successful');
         Alert.alert(
           'Embedding Generation Complete',
           `Successfully generated user interest embeddings. Check console for details.`
         );
       } else {
-        console.log('❌ Embedding generation failed:', result);
         Alert.alert('Error', 'Failed to generate embeddings.');
       }
     } catch (error) {

@@ -13,10 +13,7 @@ if (!db) {
 
 // Silent auth configuration - only log on first load
 if (process.env.NODE_ENV === 'development' && !(global as any).__AUTH_CONFIG_LOGGED__) {
-    console.log("=== Better Auth Server Configuration ===");
-    console.log("BETTER_AUTH_SECRET exists:", !!process.env.BETTER_AUTH_SECRET);
-    console.log("BETTER_AUTH_SECRET length:", process.env.BETTER_AUTH_SECRET?.length || 0);
-    console.log("Database initialized:", !!db);
+
     (global as any).__AUTH_CONFIG_LOGGED__ = true;
 }
 
@@ -54,9 +51,7 @@ export const auth = betterAuth({
         session: ({ session, user }: { session: any; user: any }) => {
             // Silent session callback - only log on first session
             if (process.env.NODE_ENV === 'development' && !(global as any).__SESSION_LOGGED__) {
-                console.log("=== Better Auth Session Callback ===");
-                console.log("User ID:", user?.id);
-                console.log("Session user ID:", session?.user?.id);
+
                 (global as any).__SESSION_LOGGED__ = true;
             }
             if (session.user) {

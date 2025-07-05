@@ -33,7 +33,7 @@ function validateEnvironment() {
         process.exit(1);
     }
 
-    console.log('✅ Environment variables validated successfully');
+
 }
 
 // Validate environment before starting server
@@ -71,26 +71,18 @@ socketServer.initialize(server);
 const PORT = config.socket.port;
 
 server.listen(PORT, () => {
-    console.log(`🚀 Socket.IO server running on port ${PORT}`);
-    console.log(`🌍 Environment: ${config.server.nodeEnv}`);
-    console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-    console.log(`📡 Client URL: ${config.socket.clientUrl}`);
-    console.log(`📊 Log Level: ${config.server.logLevel}`);
+
 });
 
 // Graceful shutdown handling
 process.on('SIGTERM', () => {
-    console.log('SIGTERM received, shutting down gracefully');
     server.close(() => {
-        console.log('Server closed');
         process.exit(0);
     });
 });
 
 process.on('SIGINT', () => {
-    console.log('SIGINT received, shutting down gracefully');
     server.close(() => {
-        console.log('Server closed');
         process.exit(0);
     });
 });
