@@ -9,7 +9,7 @@ export const CLUSTERING_CONFIG = {
 
     // Minimum number of neighbors required for a point to be considered a "core point"
     // Core points can start new clusters. Lower values = more sensitive clustering
-    MIN_SAMPLES: 2, // Reduced from 5 for development/testing
+    MIN_SAMPLES: 3, // Reduced from 5 for development/testing
 
     // Distance metric for clustering (HDBSCAN-ts only supports euclidean)
     METRIC: 'euclidean' as const,
@@ -48,10 +48,10 @@ export const LOCATION_CONFIG = {
 // OpenAI Configuration
 export const OPENAI_CONFIG = {
     // Model for event description generation
-    EVENT_GENERATION_MODEL: 'gpt-4',
+    EVENT_GENERATION_MODEL: 'gpt-4o-mini',
 
     // Model for venue type extraction
-    VENUE_EXTRACTION_MODEL: 'gpt-4',
+    VENUE_EXTRACTION_MODEL: 'gpt-4o-mini',
 
     // Temperature for event generation (higher = more creative)
     EVENT_GENERATION_TEMPERATURE: 0.8,
@@ -99,11 +99,11 @@ export const VENUE_SCORING_CONFIG = {
     // Venue selection thresholds
     SCORE_THRESHOLD: 0.5,      // Minimum score to consider a venue
     VENUE_TYPE_MATCH_THRESHOLD: 0.3, // Minimum venue type match score
-    VENUE_TYPE_CONFIDENCE_THRESHOLD: 0.2, // Only include additional types if within 0.2 confidence of top pick
-    VENUE_MAX_DETAIL_FETCHES: 10, // Max venues to check for best match
-    VENUE_IDEAL_SCORE_THRESHOLD: 0.9, // Ideal score to short-circuit search
+    VENUE_TYPE_CONFIDENCE_THRESHOLD: 0.15, // Only include additional types if within 0.15 confidence of top pick
+    VENUE_MAX_DETAIL_FETCHES: 5, // Max venues to check for best match
+    VENUE_IDEAL_SCORE_THRESHOLD: 0.7, // Ideal score to short-circuit search
 
     // Search parameters
-    DEFAULT_MAX_RESULTS: 20,   // Default max venues to search
+    DEFAULT_MAX_RESULTS: 5,   // Default max venues to search//why would this ever be higher than the max number of venues we check?//is it bc google returns them based on relevance and we are searching based on distance firsr???
     DEFAULT_MAX_DETAIL_FETCHES: 5 // Default max venues to check details
 } as const; 

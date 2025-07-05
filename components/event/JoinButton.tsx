@@ -31,21 +31,9 @@ export const JoinButton = React.memo(function JoinButton({
         if (loading) return '...';
 
         if (status === 'attending') {
-            if (isActive) {
-                return 'Attending';
-            } else if (currentStatus === 'interested') {
-                return 'Switch to Attending';
-            } else {
-                return 'Attend';
-            }
+            return 'Attending';
         } else {
-            if (isActive) {
-                return 'Interested';
-            } else if (currentStatus === 'attending') {
-                return 'Switch to Interested';
-            } else {
-                return 'Interested';
-            }
+            return 'Interested';
         }
     };
 
@@ -134,10 +122,10 @@ export const JoinButton = React.memo(function JoinButton({
 
 const styles = StyleSheet.create({
     button: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-        minWidth: 80,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 50,
+        width: 80,
         alignItems: 'center',
         justifyContent: 'center',
         borderWidth: 1,
@@ -157,7 +145,7 @@ const styles = StyleSheet.create({
         opacity: 0.5,
     },
     text: {
-        fontSize: 14,
+        fontSize: 12,
         fontWeight: '600',
     },
     activeText: {

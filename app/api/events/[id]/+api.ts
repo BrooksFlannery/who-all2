@@ -48,6 +48,11 @@ export async function GET(req: Request) {
                 location: eventData.event.location,
                 description: eventData.event.description,
                 categories: eventData.event.categories,
+                venue: eventData.event.venue,
+                venueType: eventData.event.venueType,
+                venueRating: eventData.event.venueRating,
+                venuePriceLevel: eventData.event.venuePriceLevel,
+                secondaryPhotoUrl: eventData.event.secondaryPhotoUrl,
                 hostId: eventData.event.hostId,
                 createdAt: eventData.event.date.toISOString(), // Using date as createdAt for now
                 updatedAt: eventData.event.date.toISOString(), // Using date as updatedAt for now

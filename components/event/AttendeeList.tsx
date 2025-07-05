@@ -27,7 +27,7 @@ interface AttendeeListProps {
     onUserPress?: (user: User) => void;
 }
 
-const AVATAR_SIZE = 40;
+const AVATAR_SIZE = 28;
 const ANIMATION_DURATION = 300;
 const SPRING_CONFIG = {
     damping: 15,
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
         zIndex: 1,
     },
     moreText: {
-        fontSize: 12,
+        fontSize: 10,
         fontWeight: '600',
     },
     emptyContainer: {

@@ -217,7 +217,7 @@ Format as numbered list:
 
     try {
         const response = await generateText({
-            model: openai('gpt-4'),
+            model: openai('gpt-4o-mini'),
             prompt,
             temperature: 0.8,
             maxTokens: 300
@@ -294,7 +294,7 @@ Respond with just the venue types, one per line, in order:
 
     try {
         const response = await generateText({
-            model: openai('gpt-4'),
+            model: openai('gpt-4o-mini'),
             prompt,
             temperature: 0.3
         });

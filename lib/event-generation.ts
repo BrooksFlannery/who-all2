@@ -120,6 +120,8 @@ export async function generateRealEvent(pseudoEvent: PseudoEvent, apiKey: string
             console.log(`📸 Secondary photo fetched for venue: ${venue.displayName.text}`);
         } catch (error) {
             console.warn(`⚠️ Failed to fetch secondary photo for venue: ${venue.displayName.text}`, error);
+            // Don't fail the entire event generation if photo fetching fails
+            // The event will still be created without the secondary photo
         }
     }
 

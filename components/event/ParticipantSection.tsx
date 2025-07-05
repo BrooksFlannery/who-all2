@@ -1,5 +1,6 @@
 import { ThemedText } from '@/components/ThemedText';
 import { useTextColor } from '@/hooks/useThemeColor';
+import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { AttendeeList } from './AttendeeList';
@@ -25,7 +26,8 @@ interface ParticipantSectionProps {
     };
     userParticipation: 'attending' | 'interested' | null;
     onJoinEvent: (status: 'attending' | 'interested' | null) => void;
-    loading?: boolean;
+    loadingStatus?: 'attending' | 'interested' | null;
+    isSignedIn?: boolean;
 }
 
 /**
@@ -39,7 +41,7 @@ interface ParticipantSectionProps {
  * - Join/leave buttons with loading states
  * - Visual indicators for current user participation
  * - Expandable attendee lists with overlapping avatars
- * - "You" badge for current user's participation status
+ * - Attendee circles positioned to the left of join buttons
  * 
  * @component
  * @param {ParticipantSectionProps} props - Component props
@@ -49,7 +51,8 @@ export const ParticipantSection = React.memo(function ParticipantSection({
     participants,
     userParticipation,
     onJoinEvent,
-    loading = false
+    loadingStatus = null,
+    isSignedIn = true
 }: ParticipantSectionProps) {
     const textColor = useTextColor();
 
@@ -78,31 +81,39 @@ export const ParticipantSection = React.memo(function ParticipantSection({
                 styles.section,
                 isUserAttending && styles.activeSection
             ]}>
-                <View style={styles.header}>
-                    <View style={styles.titleContainer}>
-                        <ThemedText style={[styles.title, { color: textColor }]}>
-                            Attending ({participants.attending.length})
-                        </ThemedText>
-                        {isUserAttending && (
-                            <View style={styles.statusBadge}>
-                                <ThemedText style={styles.statusText}>You</ThemedText>
+                {isUserAttending && (
+                    <LinearGradient
+                        colors={['rgba(0, 122, 255, 0.3)', 'rgba(0, 122, 255, 0)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.gradientOverlay}
+                    />
+                )}
+                <View style={styles.contentRow}>
+                    <View style={styles.attendeeContainer}>
+                        {participants.attending.length > 0 ? (
+                            <AttendeeList
+                                users={participants.attending}
+                                maxVisible={8}
+                                overlap={0.5}
+                                onUserPress={handleUserPress}
+                            />
+                        ) : (
+                            <View style={styles.emptyContainer}>
+                                <ThemedText style={[styles.emptyText, { color: textColor }]}>
+                                    No attendees yet
+                                </ThemedText>
                             </View>
                         )}
                     </View>
+
                     <JoinButton
                         status="attending"
                         currentStatus={userParticipation}
                         onPress={handleJoinAttending}
-                        loading={loading}
+                        loading={loadingStatus === 'attending'}
                     />
                 </View>
-
-                <AttendeeList
-                    users={participants.attending}
-                    maxVisible={8}
-                    overlap={0.5}
-                    onUserPress={handleUserPress}
-                />
             </View>
 
             {/* Interested Section */}
@@ -110,41 +121,40 @@ export const ParticipantSection = React.memo(function ParticipantSection({
                 styles.section,
                 isUserInterested && styles.activeSection
             ]}>
-                <View style={styles.header}>
-                    <View style={styles.titleContainer}>
-                        <ThemedText style={[styles.title, { color: textColor }]}>
-                            Interested ({participants.interested.length})
-                        </ThemedText>
-                        {isUserInterested && (
-                            <View style={styles.statusBadge}>
-                                <ThemedText style={styles.statusText}>You</ThemedText>
+                {isUserInterested && (
+                    <LinearGradient
+                        colors={['rgba(0, 122, 255, 0.3)', 'rgba(0, 122, 255, 0)']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.gradientOverlay}
+                    />
+                )}
+                <View style={styles.contentRow}>
+                    <View style={styles.attendeeContainer}>
+                        {participants.interested.length > 0 ? (
+                            <AttendeeList
+                                users={participants.interested}
+                                maxVisible={8}
+                                overlap={0.5}
+                                onUserPress={handleUserPress}
+                            />
+                        ) : (
+                            <View style={styles.emptyContainer}>
+                                <ThemedText style={[styles.emptyText, { color: textColor }]}>
+                                    No interested users yet
+                                </ThemedText>
                             </View>
                         )}
                     </View>
+
                     <JoinButton
                         status="interested"
                         currentStatus={userParticipation}
                         onPress={handleJoinInterested}
-                        loading={loading}
+                        loading={loadingStatus === 'interested'}
                     />
                 </View>
-
-                <AttendeeList
-                    users={participants.interested}
-                    maxVisible={8}
-                    overlap={0.5}
-                    onUserPress={handleUserPress}
-                />
             </View>
-
-            {/* Not participating message */}
-            {!userParticipation && (
-                <View style={styles.notParticipatingContainer}>
-                    <ThemedText style={[styles.notParticipatingText, { color: textColor }]}>
-                        Join the event to see the full participant list and participate in chat
-                    </ThemedText>
-                </View>
-            )}
         </View>
     );
 });
@@ -152,56 +162,45 @@ export const ParticipantSection = React.memo(function ParticipantSection({
 const styles = StyleSheet.create({
     container: {
         paddingHorizontal: 20,
-        paddingVertical: 16,
         borderBottomWidth: 1,
         borderBottomColor: '#E5E5EA',
     },
     section: {
-        marginBottom: 24,
-        padding: 12,
-        borderRadius: 8,
+        marginBottom: 8,
+        paddingHorizontal: 12,
+        paddingVertical: 0,
+        borderRadius: 50,
         borderWidth: 1,
         borderColor: 'transparent',
+        position: 'relative',
+        overflow: 'hidden',
     },
     activeSection: {
-        backgroundColor: 'rgba(0, 122, 255, 0.05)',
-        borderColor: 'rgba(0, 122, 255, 0.2)',
+        borderColor: 'transparent',
     },
-    header: {
+    contentRow: {
         flexDirection: 'row',
+        alignItems: 'center',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
     },
-    titleContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
+    attendeeContainer: {
         flex: 1,
+        marginRight: 16,
     },
-    title: {
-        fontSize: 18,
-        fontWeight: '600',
-    },
-    statusBadge: {
-        backgroundColor: '#007AFF',
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 10,
-        marginLeft: 8,
-    },
-    statusText: {
-        color: '#FFFFFF',
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    notParticipatingContainer: {
+    emptyContainer: {
         paddingVertical: 16,
         alignItems: 'center',
     },
-    notParticipatingText: {
+    emptyText: {
         fontSize: 14,
-        textAlign: 'center',
-        opacity: 0.7,
-        lineHeight: 20,
+        opacity: 0.6,
+    },
+    gradientOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        borderRadius: 50,
     },
 }); 
