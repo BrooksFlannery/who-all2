@@ -1,10 +1,12 @@
 import { useAuth } from '@/components/AuthProvider';
 import { EventList } from '@/components/EventList';
+import { ThemedText } from '@/components/ThemedText';
+import { useBackgroundColor, useBorderColor, useCardBackgroundColor, useErrorColor, usePrimaryColor, useSecondaryBackgroundColor, useSecondaryTextColor, useTextColor } from '@/hooks/useThemeColor';
 import { getAuthHeaders } from '@/lib/auth-client';
 import { Event, EventCategory } from '@/lib/db/types';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 // Event categories for filtering
 const categories = ['Recommended', 'All', 'Fitness', 'Social', 'Creative', 'Technology', 'Education', 'Food', 'Music', 'Outdoors', 'Business', 'Sports', 'Other'] as const;
@@ -19,6 +21,16 @@ export default function EventsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingRecommended, setIsLoadingRecommended] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Theme colors
+  const backgroundColor = useBackgroundColor();
+  const secondaryBackgroundColor = useSecondaryBackgroundColor();
+  const cardBackgroundColor = useCardBackgroundColor();
+  const textColor = useTextColor();
+  const secondaryTextColor = useSecondaryTextColor();
+  const primaryColor = usePrimaryColor();
+  const borderColor = useBorderColor();
+  const errorColor = useErrorColor();
 
   // Load recommended events
   const loadRecommendedEvents = async () => {
@@ -107,33 +119,36 @@ export default function EventsScreen() {
 
   if (isCurrentlyLoading) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.loadingText}>Loading events...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: secondaryBackgroundColor }]}>
+        <ThemedText style={[styles.loadingText, { color: textColor }]}>Loading events...</ThemedText>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => window.location.reload()}>
-          <Text style={styles.retryButtonText}>Retry</Text>
+      <View style={[styles.errorContainer, { backgroundColor: secondaryBackgroundColor }]}>
+        <ThemedText style={[styles.errorText, { color: errorColor }]}>{error}</ThemedText>
+        <TouchableOpacity
+          style={[styles.retryButton, { backgroundColor: primaryColor }]}
+          onPress={() => window.location.reload()}
+        >
+          <ThemedText style={[styles.retryButtonText, { color: '#FFFFFF' }]}>Retry</ThemedText>
         </TouchableOpacity>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: secondaryBackgroundColor }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Events</Text>
-        <Text style={styles.headerSubtitle}>Discover what&apos;s happening around you</Text>
+      <View style={[styles.header, { backgroundColor: cardBackgroundColor }]}>
+        <ThemedText style={[styles.headerTitle, { color: textColor }]}>Events</ThemedText>
+        <ThemedText style={[styles.headerSubtitle, { color: secondaryTextColor }]}>Discover what&apos;s happening around you</ThemedText>
       </View>
 
       {/* Category Bar */}
-      <View style={styles.categoryBar}>
+      <View style={[styles.categoryBar, { backgroundColor: cardBackgroundColor, borderBottomColor: borderColor }]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -144,16 +159,17 @@ export default function EventsScreen() {
               key={category}
               style={[
                 styles.categoryButton,
-                selectedCategory === category && styles.selectedCategory
+                selectedCategory === category && [styles.selectedCategory, { borderBottomColor: primaryColor }]
               ]}
               onPress={() => setSelectedCategory(category)}
             >
-              <Text style={[
+              <ThemedText style={[
                 styles.categoryButtonText,
-                selectedCategory === category && styles.selectedCategoryText
+                { color: secondaryTextColor },
+                selectedCategory === category && [styles.selectedCategoryText, { color: primaryColor }]
               ]}>
                 {category}
-              </Text>
+              </ThemedText>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -161,21 +177,21 @@ export default function EventsScreen() {
 
       {/* Events List */}
       {filteredEvents.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>
+        <View style={[styles.emptyState, { backgroundColor: secondaryBackgroundColor }]}>
+          <ThemedText style={[styles.emptyStateText, { color: textColor }]}>
             {selectedCategory === 'Recommended'
               ? 'No recommended events found'
               : selectedCategory === 'All'
                 ? 'No events found'
                 : `No ${selectedCategory} events found`
             }
-          </Text>
-          <Text style={styles.emptyStateSubtext}>
+          </ThemedText>
+          <ThemedText style={[styles.emptyStateSubtext, { color: secondaryTextColor }]}>
             {selectedCategory === 'Recommended'
               ? 'Try chatting with the AI to get personalized recommendations!'
               : 'Check back later for new events!'
             }
-          </Text>
+          </ThemedText>
         </View>
       ) : (
         <EventList
@@ -192,30 +208,24 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
   },
   header: {
     paddingTop: 60,
     paddingHorizontal: 20,
     paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#1A1A1A',
     marginBottom: 4,
   },
   headerSubtitle: {
     fontSize: 16,
-    color: '#666666',
     fontWeight: '400',
   },
   categoryBar: {
-    backgroundColor: '#FFFFFF',
     paddingVertical: 0,
     borderBottomWidth: 1,
-    borderBottomColor: '#E9ECEF',
   },
   categoryBarContent: {
     paddingHorizontal: 20,
@@ -228,19 +238,14 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderBottomWidth: 3,
     borderBottomColor: 'transparent',
-    backgroundColor: 'transparent',
   },
   selectedCategory: {
-    borderBottomColor: '#007AFF',
-    backgroundColor: 'transparent',
   },
   categoryButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6C757D',
   },
   selectedCategoryText: {
-    color: '#007AFF',
     fontWeight: '700',
   },
 
@@ -248,29 +253,24 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
   },
   loadingText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#495057',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
     padding: 20,
   },
   errorText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#DC3545',
     textAlign: 'center',
     marginBottom: 16,
   },
   retryButton: {
-    backgroundColor: '#007AFF',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
@@ -278,7 +278,6 @@ const styles = StyleSheet.create({
   retryButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#FFFFFF',
   },
   emptyState: {
     flex: 1,
@@ -293,13 +292,11 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 20,
     fontWeight: '600',
-    color: '#495057',
     textAlign: 'center',
     marginBottom: 8,
   },
   emptyStateSubtext: {
     fontSize: 16,
-    color: '#6C757D',
     textAlign: 'center',
   },
 });

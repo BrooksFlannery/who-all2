@@ -62,6 +62,6 @@ const styles = StyleSheet.create({
     },
     text: {
         fontWeight: '500',
-        color: '#FFFFFF',
+        color: '#FFFFFF', // Keep white for contrast against colored backgrounds
     },
 }); 

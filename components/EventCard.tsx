@@ -1,5 +1,5 @@
 import { ThemedText } from '@/components/ThemedText';
-import { useCardBackgroundColor, useCategoryColor, useSecondaryTextColor, useTextColor } from '@/hooks/useThemeColor';
+import { useBorderColor, useCardBackgroundColor, useCategoryColor, useSecondaryTextColor, useTextColor } from '@/hooks/useThemeColor';
 import { Event } from '@/lib/db/types';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
@@ -22,6 +22,8 @@ export function EventCard({ event, onPress, compact = false, scrollY, index }: E
     const textColor = useTextColor();
     const secondaryTextColor = useSecondaryTextColor();
     const backgroundColor = useCardBackgroundColor();
+    const cardBackgroundColor = useCardBackgroundColor();
+    const borderColor = useBorderColor();
     const { height: screenHeight } = useWindowDimensions();
 
     // Get category colors at component level (hooks must be at top level)
@@ -120,7 +122,7 @@ export function EventCard({ event, onPress, compact = false, scrollY, index }: E
     });
 
     return (
-        <View style={[styles.eventCard, compact && styles.eventCardCompact, { backgroundColor }]}>
+        <View style={[styles.eventCard, compact && styles.eventCardCompact, { backgroundColor: cardBackgroundColor, borderColor: borderColor }]}>
             <TouchableOpacity
                 style={styles.cardContent}
                 activeOpacity={0.7}
@@ -161,7 +163,7 @@ export function EventCard({ event, onPress, compact = false, scrollY, index }: E
                 {/* Content Section */}
                 <View style={styles.contentContainer}>
                     {/* Venue and Time Row */}
-                    <View style={styles.venueRow}>
+                    <View style={[styles.venueRow, { borderBottomColor: borderColor }]}>
                         {venueName && (
                             <TouchableOpacity
                                 style={styles.venueContainer}
@@ -333,7 +335,6 @@ const styles = StyleSheet.create({
         marginBottom: 0,
         paddingBottom: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#E5E5EA',
     },
     timeContainer: {
         alignItems: 'flex-end',
